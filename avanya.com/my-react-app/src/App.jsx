@@ -333,7 +333,7 @@ const App = () => {
           <nav className="container mx-auto flex justify-between items-center">
             {/* Updated Logo Area with CPU icon and "AVIANYA TECH" text */}
             <div className="flex items-center space-x-2">
-                <Cpu className="w-8 h-8 text-indigo-600" /> {/* Changed to Cpu icon */}
+                {/* <Cpu className="w-8 h-8 text-indigo-600" /> Changed to Cpu icon */}
                 <div className="text-2xl md:text-3xl font-extrabold text-indigo-800 tracking-wide">
                 AVIANYA TECH {/* Changed text to "AVIANYA TECH" */}
                 </div>
@@ -557,6 +557,7 @@ const App = () => {
 
           </>
         ) : (
+          
           activeSection === 'privacy-policy' ? (
             <PrivacyPolicy navigateTo={navigateTo} />
           ) : activeSection === 'terms-conditions' ? (

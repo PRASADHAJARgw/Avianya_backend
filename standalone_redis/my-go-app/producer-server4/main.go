@@ -70,24 +70,24 @@ func main() {
 func markAsInProgress(db *sql.DB) ([]int, map[string]string, error) {
 	// Drop the view if it exists
 	// Drop both table or view if exists (safe way)
-_, _ = db.Exec(`DROP VIEW IF EXISTS selected_rows2`)
-_, _ = db.Exec(`DROP TABLE IF EXISTS selected_rows2`)
+_, _ = db.Exec(`DROP VIEW IF EXISTS selected_rows4`)
+_, _ = db.Exec(`DROP TABLE IF EXISTS selected_rows4`)
 
 	// Create view for partitioned selection
 	_, err := db.Exec(`
-		CREATE TABLE selected_rows2 AS
+		CREATE TABLE selected_rows4 AS
 		WITH quartiles AS (
 			SELECT *, NTILE(4) OVER (ORDER BY id) AS quartile
 			FROM campaign_master_1
 		)
 		SELECT id, column1 FROM quartiles
-		WHERE quartile = 2 AND column3 = 1  LIMIT ?`, batchSize)
+		WHERE quartile = 4 AND column3 = 1  LIMIT ?`, batchSize)
 	if err != nil {
 		return nil, nil, fmt.Errorf("TABLE creation failed: %w", err)
 	}
 
 	// Select from the view
-	rows, err := db.Query("SELECT id, column1 FROM selected_rows2")
+	rows, err := db.Query("SELECT id, column1 FROM selected_rows4")
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to select from view: %w", err)
 	}
