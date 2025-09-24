@@ -1,0 +1,144 @@
+/* // filepath: src/styles/Sidebar.css */
+.maincont {
+    padding-left: 3px;
+}
+
+ul {
+    list-style-type: none;
+    padding: 0;
+}
+
+li {
+    margin-bottom: 10px;
+}
+
+.sidebar-link {
+    display: flex;
+    align-items: center;
+    text-decoration: none;
+    color: #000;
+    padding: 0px;
+    transition: background-color 0.3s;
+}
+
+.sidebar-link:hover {
+    background-color: rgba(0, 0, 0, 0.1);
+    border-radius: 8px;
+}
+
+.sidebar-icon {
+    width: 24px;
+    height: 24px;
+    margin-right: 10px;
+}
+
+.show-dashboard.show-template.show-create-new{
+    padding: 10px;
+}
+
+ul {
+    list-style: none;
+    padding: 0 0px;
+    text-wrap: nowrap;
+}
+
+ul li {
+    margin: 30px 5px;
+    display: flex;
+    align-items: flex-end;
+    justify-content: start;
+    cursor: pointer;
+    text-wrap: nowrap;
+}
+
+ul li img {
+    width: 40px;
+}
+
+ul li p {
+    white-space: nowrap;
+    text-wrap: nowrap;
+    display: none;
+}
+
+ul li div {
+    text-wrap: nowrap;
+    width: 100%;
+}
+
+.side-nav:hover {
+    width: -150px;
+}
+
+.side-nav:hover ul li p {
+    font-size: 16px;
+    margin-top: 7px;
+    margin-right: 10px;
+    display: block;
+}
+
+.side-nav {
+    width: 50px;
+    height: 100vh;
+    top: 0;
+    left: 0;
+    padding: 15px 0px;
+    background: rgba(255, 255, 255, 0);
+    backdrop-filter: blur(1px);
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
+    transition: width 0.3s;
+    z-index: 1000;
+    position: fixed;
+}
+
+.user_img {
+    position: relative;
+    text-align: center;
+    margin-bottom: 20px;
+}
+
+.user-img {
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 50px;
+    height: 50px;
+    border-radius: 50%;
+    margin-bottom: 100px;
+}
+
+.user {
+    position: relative;
+    text-align: center;
+    margin-bottom: 20px;
+    height: 70px;
+}
+
+.user-info {
+    position: absolute;
+    margin-top: 35px;
+    left: 50%;
+    transform: translateX(-50%);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    display: none;
+    font-size: 10px;
+    text-align: center; /* Center the text within the element */
+}
+
+.side-nav:hover .user-info {
+    display: block;
+}
+
+.sidebar-item {
+    display: flex;
+    align-items: center;
+}
+
+.sidebar-item img {
+    margin-right: 10px; /* Adjust the spacing between the image and text */
+}
+
