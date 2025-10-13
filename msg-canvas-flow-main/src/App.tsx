@@ -92,15 +92,16 @@ import AdsCampaigns from './pages/ads/Campaigns';
 import AdsCreateCampaign from './pages/ads/CreateCampaign';
 import AdsAICampaign from './pages/ads/AICampaign';
 import AdsNotFound from './pages/ads/NotFound';
+import WaDashboard from './pages/whatsapp/Dashboard';
 // Placeholder components for routes
-const Dashboard = () => <div><h1>Dashboard Content</h1></div>;
+// const Dashboard = () => <div><h1>Dashboard Contents</h1></div>;
 // const Templates = () => <div><h1>Templates Content</h1></div>;
 // const CreateNew = () => <div><h1>Create New Bot Content</h1></div>; // This is replaced by Index
 const Campaigns = () => <div><h1>Campaigns Content</h1></div>;
 
 function App() {
   const [isSidebarHovered, setIsSidebarHovered] = useState(false);
-  const [managerMode, setManagerMode] = useState('whatsapp'); // 'whatsapp' or 'ads'
+  const [managerMode, setManagerMode] = useState<'whatsapp' | 'ads'>('whatsapp'); // 'whatsapp' or 'ads'
   const sidebarCollapsedWidth = 10; // Define sidebar widths
   const sidebarExpandedWidth = 5;
 
@@ -141,6 +142,7 @@ function App() {
         <div className={`main-content-area ${isSidebarHovered ? 'sidebar-expanded' : ''}`}>
           <Routes>
             {/* Ads routes (always registered) */}
+
             <Route path="/ads/onboarding" element={<AdsOnboarding />} />
             <Route path="/ads/dashboard" element={<AdsDashboard />} />
             <Route path="/ads/campaigns" element={<AdsCampaigns />} />
@@ -152,7 +154,8 @@ function App() {
             <Route path="/ads/" element={<AdsIndex />} />
 
             {/* WhatsApp (WA) routes (always registered) */}
-            <Route path="/wa/dashboard" element={<Dashboard />} />
+            <Route path="/wa/dashboard" element={<WaDashboard isSidebarHovered={isSidebarHovered} />} />
+            {/* <Route path="/wa/templates" element={<TemplatesList isSidebarHovered={isSidebarHovered} />} /> */}
             <Route path="/wa/templates" element={<TemplatesList isSidebarHovered={isSidebarHovered} />} />
             <Route path="/wa/templates/new" element={<Templates isSidebarHovered={isSidebarHovered} initialTemplateJson={null} />} />
             <Route path="/wa/templates/edit/:id" element={<TemplatesEditor isSidebarHovered={isSidebarHovered} />} />
@@ -160,7 +163,7 @@ function App() {
             <Route path="/wa/campaigns" element={<Campaigns />} />
 
             {/* Default root route: decide based on managerMode to preserve previous UX */}
-            <Route path="/" element={managerMode === 'ads' ? <AdsIndex /> : <Dashboard />} />
+            <Route path="/" element={managerMode === 'ads' ? <AdsIndex /> : <WaDashboard isSidebarHovered={isSidebarHovered} />} />
 
             {/* Fallbacks: keep specific not-found handlers for ads and wa prefixes */}
             <Route path="/ads/*" element={<AdsNotFound />} />

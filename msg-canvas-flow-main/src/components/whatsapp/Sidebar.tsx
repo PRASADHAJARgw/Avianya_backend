@@ -23,11 +23,20 @@ import {
   CreditCard,
   Settings,
   MessageSquare,
+  BarChart2,
+  LogIn,
 } from 'lucide-react';
 
 
-const Sidebar = ({ onLinkClick, onHoverChange, onManagerChange, activeManager }) => {
-  const [hovered, setHovered] = useState(false);
+type SidebarProps = {
+  onLinkClick: (key: string) => void;
+  onHoverChange: (hovered: boolean) => void;
+  onManagerChange?: (m: 'whatsapp' | 'ads') => void;
+  activeManager?: 'whatsapp' | 'ads';
+};
+
+const Sidebar: React.FC<SidebarProps> = ({ onLinkClick, onHoverChange, onManagerChange, activeManager }) => {
+  const [hovered, setHovered] = useState<boolean>(false);
   const [manager, setManager] = useState<'whatsapp' | 'ads'>(activeManager || 'whatsapp');
   const navigate = useNavigate();
 
@@ -54,7 +63,7 @@ const Sidebar = ({ onLinkClick, onHoverChange, onManagerChange, activeManager })
     // intentionally not calling onManagerChange here — parent is the source
     // of truth for the active manager and RouteWatcher will set it.
     // Sidebar updates the parent only on explicit user actions (switchManager).
-  }, [activeManager]);
+  }, [activeManager, manager]);
 
   return (
     <>
