@@ -1,16 +1,16 @@
 import React, { useEffect, useState } from 'react';
 // --- FIX: Added 'X' to the import list ---
 import { Settings, Trash2, Copy, HelpCircle, X } from 'lucide-react'; 
-import { Button } from './ui/button';
-import { Input } from './ui/input';
-import { Label } from './ui/label';
-import { Textarea } from './ui/textarea';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
-import { Separator } from './ui/separator';
+import { Button } from '../ui/button';
+import { Input } from '../ui/input';
+import { Label } from '../ui/label';
+import { Textarea } from '../ui/textarea';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
+import { Separator } from '../ui/separator';
 import { useWorkflowStore } from '../../store/workflowStore';
 import { useToast } from '../../hooks/use-toast';
 import { cn } from '../../lib/utils';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/tooltip';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/tooltip';
 
 // Helper component for consistent section titles
 const PanelSection = ({ title, children }: { title: string; children: React.ReactNode }) => (
@@ -46,7 +46,12 @@ function TemplatePicker({ value, onSelect }: { value?: string; onSelect: (t: { t
   useEffect(() => {
     let mounted = true;
     setLoadingTemplates(true);
-    fetch('http://localhost:8080/templates')
+    fetch('http://localhost:8080/templates', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    })
       .then(async (res) => {
         const text = await res.text();
         try {

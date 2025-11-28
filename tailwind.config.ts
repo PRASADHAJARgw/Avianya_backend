@@ -71,6 +71,16 @@ export default {
         glass: {
           bg: "hsl(var(--glass-bg))",
         },
+        chat: {
+          bg: "hsl(var(--chat-bg))",
+          pattern: "hsl(var(--chat-pattern))",
+        },
+        message: {
+          sent: "hsl(var(--message-sent))",
+          "sent-foreground": "hsl(var(--message-sent-foreground))",
+          received: "hsl(var(--message-received))",
+          "received-foreground": "hsl(var(--message-received-foreground))",
+        },
       },
       backgroundImage: {
         'gradient-primary': 'var(--gradient-primary)',

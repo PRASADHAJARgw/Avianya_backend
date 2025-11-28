@@ -2,7 +2,7 @@ import React from 'react';
 import { MessageSquare, Clock, GitBranch, Play, Database, Webhook, X } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { useWorkflowStore } from '../../store/workflowStore';
-import { Button } from './ui/button';
+import { Button } from '../ui/button';
 import { NodeProps, Handle, Position } from 'reactflow';
 
 const nodeConfigs = {

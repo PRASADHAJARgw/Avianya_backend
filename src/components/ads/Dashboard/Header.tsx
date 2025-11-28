@@ -1,4 +1,4 @@
-import { Button } from "../ui/button";
+import { Button } from "../../ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -6,51 +6,81 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from "../ui/dropdown-menu";
-import { Avatar, AvatarFallback, AvatarImage } from "../ui/avatar";
-import { User, Settings, LogOut } from "lucide-react";
+} from "../../ui/dropdown-menu";
+import { Avatar, AvatarFallback, AvatarImage } from "../../ui/avatar";
+import { User, Settings, LogOut, Megaphone, MessageCircle } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 
-export function Header() {
+interface HeaderProps {
+  user: {
+    name: string;
+    photo: string | null;
+    email: string | null;
+  };
+  onManagerChange?: (m: 'whatsapp' | 'ads') => void;
+  activeManager?: 'whatsapp' | 'ads';
+}
+
+export function Header({ user, onManagerChange, activeManager }: HeaderProps) {
+  // Defensive: fallback to default user if prop is missing
+  const safeUser = user || { name: "User", photo: null, email: null };
+  const userName = safeUser.name;
+  const userPhoto = safeUser.photo;
+  const userEmail = safeUser.email;
+  const navigate = useNavigate();
+  const manager = activeManager || 'whatsapp';
+  
+  const switchManager = (m: 'whatsapp' | 'ads') => {
+    if (onManagerChange) onManagerChange(m);
+    if (m === 'ads') navigate('/ads/dashboard');
+    else navigate('/wa/dashboard');
+  };
+  
+  const handleLogout = () => {
+    localStorage.clear();
+    navigate("/login", { replace: true });
+  };
   return (
     <header className="bg-card border-b border-border px-6 py-4 flex items-center justify-between">
-      <div></div> {/* Spacer for alignment */}
-      
+      <div className="flex items-center">
+        <img src="/src/assets/images/avianya.png" alt="Avianya Tech Logo" className="h-10 mr-2" />
+        <span className="font-semibold text-2xl">Avianya Techjnjc</span>
+      </div>
       <div className="flex items-center space-x-4">
-        {/* User Profile Dropdown */}
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="ghost" className="relative h-10 w-10 rounded-full">
-              <Avatar className="h-10 w-10">
-                <AvatarImage src="/placeholder.svg" alt="User" />
-                <AvatarFallback className="bg-accent-blue text-accent-blue-foreground">JD</AvatarFallback>
-              </Avatar>
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent className="w-56" align="end" forceMount>
-            <DropdownMenuLabel className="font-normal">
-              <div className="flex flex-col space-y-1">
-                <p className="text-sm font-medium leading-none">John Doe</p>
-                <p className="text-xs leading-none text-muted-foreground">
-                  john@example.com
-                </p>
-              </div>
-            </DropdownMenuLabel>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem>
-              <User className="mr-2 h-4 w-4" />
-              <span>Profile</span>
-            </DropdownMenuItem>
-            <DropdownMenuItem>
-              <Settings className="mr-2 h-4 w-4" />
-              <span>Settings</span>
-            </DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem>
-              <LogOut className="mr-2 h-4 w-4" />
-              <span>Log out</span>
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+        {/* Manager toggle buttons */}
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => switchManager('whatsapp')}
+            className="toggle-btn p-2 rounded"
+            style={{
+              background: manager === 'whatsapp' ? '#f5f5f5' : 'transparent',
+              transition: 'background 0.2s'
+            }}
+            aria-label="Switch to WhatsApp Manager"
+            title="WhatsApp Manager"
+          >
+            <img
+              src="/src/assets/images/Whatsapp Icons.png"
+              alt="WhatsApp Manager"
+              style={{
+                width: manager === 'whatsapp' ? '32px' : '28px',
+                height: manager === 'whatsapp' ? '32px' : '28px',
+                objectFit: 'contain'
+              }}
+            />
+          </button>
+
+          <button
+            type="button"
+            onClick={() => switchManager('ads')}
+            className={`toggle-btn p-2 rounded ${manager === 'ads' ? 'bg-primary text-white' : 'bg-transparent'}`}
+            aria-label="Switch to Ads Manager"
+            title="Ads Manager"
+          >
+            <Megaphone />
+          </button>
+        </div>
       </div>
     </header>
   );

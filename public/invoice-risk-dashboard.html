@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Invoice Risk Dashboard</title>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+</head>
+<body class="bg-gray-100">
+    <div class="container mx-auto p-4">
+        <h1 class="text-2xl font-bold mb-4">Invoice Risk Prediction Dashboard</h1>
+        <div id="scatter" class="mb-8"></div>
+        <div id="bar" class="mb-8"></div>
+        <div id="timeline"></div>
+    </div>
+    <script>
+        fetch('http://localhost:5000/api/invoices')
+            .then(res => res.json())
+            .then(data => {
+                // Scatter Plot
+                const width = 600, height = 300, margin = 40;
+                const svg = d3.select("#scatter")
+                    .append("svg")
+                    .attr("width", width)
+                    .attr("height", height);
+
+                const x = d3.scaleLinear()
+                    .domain([0, 1])
+                    .range([margin, width - margin]);
+                const y = d3.scaleLinear()
+                    .domain(d3.extent(data, d => +d.days_to_due))
+                    .range([height - margin, margin]);
+
+                svg.append("g")
+                    .attr("transform", `translate(0,${height - margin})`)
+                    .call(d3.axisBottom(x));
+                svg.append("g")
+                    .attr("transform", `translate(${margin},0)`)
+                    .call(d3.axisLeft(y));
+
+                svg.selectAll("circle")
+                    .data(data)
+                    .enter()
+                    .append("circle")
+                    .attr("cx", d => x(d.risk_score))
+                    .attr("cy", d => y(d.days_to_due))
+                    .attr("r", 5)
+                    .attr("fill", d => d.predicted_risk == 1 ? "green" : "red")
+                    .append("title")
+                    .text(d => `Customer: ${d.cust_number}\nRisk: ${d.risk_score.toFixed(2)}`);
+
+                // Bar Chart
+                const barData = d3.rollups(
+                    data.filter(d => d.aging_bracket),
+                    v => v.length,
+                    d => d.aging_bracket
+                ).map(([k, v]) => ({aging_bracket: k, count: v}));
+
+                const barWidth = 400, barHeight = 250;
+                const barSvg = d3.select("#bar")
+                    .append("svg")
+                    .attr("width", barWidth)
+                    .attr("height", barHeight);
+
+                const xBar = d3.scaleBand()
+                    .domain(barData.map(d => d.aging_bracket))
+                    .range([40, barWidth - 20])
+                    .padding(0.2);
+                const yBar = d3.scaleLinear()
+                    .domain([0, d3.max(barData, d => d.count)])
+                    .range([barHeight - 40, 20]);
+
+                barSvg.append("g")
+                    .attr("transform", `translate(0,${barHeight - 40})`)
+                    .call(d3.axisBottom(xBar));
+                barSvg.append("g")
+                    .attr("transform", `translate(40,0)`)
+                    .call(d3.axisLeft(yBar));
+
+                barSvg.selectAll("rect")
+                    .data(barData)
+                    .enter()
+                    .append("rect")
+                    .attr("x", d => xBar(d.aging_bracket))
+                    .attr("y", d => yBar(d.count))
+                    .attr("width", xBar.bandwidth())
+                    .attr("height", d => barHeight - 40 - yBar(d.count))
+                    .attr("fill", "#3182ce");
+
+                // Timeline
+                const parseDate = d3.utcParse("%Y-%m-%d");
+                const timelineData = d3.rollups(
+                    data.filter(d => d.due_in_date),
+                    v => v.length,
+                    d => d.due_in_date.slice(0,10)
+                ).map(([k, v]) => ({due_date: parseDate(k), count: v}));
+
+                const timelineWidth = 600, timelineHeight = 200;
+                const timelineSvg = d3.select("#timeline")
+                    .append("svg")
+                    .attr("width", timelineWidth)
+                    .attr("height", timelineHeight);
+
+                const xTime = d3.scaleTime()
+                    .domain(d3.extent(timelineData, d => d.due_date))
+                    .range([40, timelineWidth - 20]);
+                const yTime = d3.scaleLinear()
+                    .domain([0, d3.max(timelineData, d => d.count)])
+                    .range([timelineHeight - 40, 20]);
+
+                timelineSvg.append("g")
+                    .attr("transform", `translate(0,${timelineHeight - 40})`)
+                    .call(d3.axisBottom(xTime));
+                timelineSvg.append("g")
+                    .attr("transform", `translate(40,0)`)
+                    .call(d3.axisLeft(yTime));
+
+                timelineSvg.selectAll("rect")
+                    .data(timelineData)
+                    .enter()
+                    .append("rect")
+                    .attr("x", d => xTime(d.due_date) - 5)
+                    .attr("y", d => yTime(d.count))
+                    .attr("width", 10)
+                    .attr("height", d => timelineHeight - 40 - yTime(d.count))
+                    .attr("fill", "#805ad5");
+            });
+    </script>
+</body>
+</html>

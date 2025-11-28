@@ -1,7 +1,7 @@
 import { Link, useLocation } from "react-router-dom";
 import { cn } from "@/lib/utils";
 // import { Button } from "@/components/ui/button";
-import { Button } from "../ui/button";
+import { Button } from "../../ui/button";
 import { 
   LayoutDashboard, 
   Megaphone, 
@@ -10,7 +10,8 @@ import {
   Settings,
   ChevronLeft,
   ChevronRight,
-  Sparkles
+  Sparkles,
+  MessageCircle
 } from "lucide-react";
 
 interface SidebarProps {
@@ -33,6 +34,11 @@ const navigationItems = [
     name: "AI Campaign",
     href: "/ads/ai-campaign",
     icon: Sparkles,
+  },
+  {
+    name: "CTWA",
+    href: "/ctwa",
+    icon: MessageCircle,
   },
   {
     name: "Audiences",

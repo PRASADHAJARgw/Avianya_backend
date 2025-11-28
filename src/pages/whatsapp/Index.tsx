@@ -27,6 +27,7 @@
 // export default Index;
 
 import React from 'react';
+import { Header } from '../../components/whatsapp/Header';
 import { ReactFlowProvider } from 'reactflow';
 import 'reactflow/dist/style.css'; // Import React Flow styles
 
@@ -38,6 +39,7 @@ import { WorkflowToolbar } from '../../components/whatsapp/WorkflowToolbar';
 const Index = () => {
   return (
     <div className='w-auto'>
+      {/* <Header /> */}
       <div className="h-screen bg-gradient-canvas flex flex-col overflow-hidden w-auto">
         <ReactFlowProvider>
           <WorkflowToolbar />

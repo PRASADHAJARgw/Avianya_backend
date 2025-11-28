@@ -1,8 +1,29 @@
+
+.kpi-cards {
+    display: flex;
+    justify-content: space-around;
+    flex-wrap: wrap;
+    margin-bottom: 20px;
+}
+.kpi {
+    background: var(--bg-dark-secondary);
+    padding: 20px 25px;
+    border-radius: 12px;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.4);
+    text-align: center;
+    margin: 10px;
+    min-width: 150px;
+    border-left: 5px solid var(--box-border);
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
 /* // filepath: src/styles/Sidebar.css */
 .maincont {
     padding-left: 3px;
 }
 
+
+/* Move :root to the top of the file if not already present */
+/* Remove :root from inside ul */
 ul {
     list-style-type: none;
     padding: 0;

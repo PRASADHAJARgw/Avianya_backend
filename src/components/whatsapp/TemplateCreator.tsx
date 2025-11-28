@@ -709,12 +709,16 @@
 import React, { useState, useEffect, useRef } from 'react';
 import Preview from './preview';
 import { v4 as uuidv4 } from 'uuid';
+import { useAuth } from '@/contexts/AuthContext';
 
 
 let buttonIdCounter = 0;
 let appIdCounter = 0;
 
 const TemplateCreator = ({ isSidebarHovered,initialTemplateJson }) => {
+    // Get current user from auth context
+    const { user } = useAuth();
+    
     // Core Info
     const [templateName, setTemplateName] = useState("");
     const [language, setLanguage] = useState("en_US");
@@ -1157,8 +1161,21 @@ const TemplateCreator = ({ isSidebarHovered,initialTemplateJson }) => {
 
         setLoading(true);
         try {
-            // Single atomic request: POST combined payload to /template
-            const combinedPayload = { template: templateJson, send_message: sendMessageJson };
+            // Get user info for tracking
+            const userId = user?.id || 'anonymous';
+            const userEmail = user?.email || '';
+            const userRole = user?.user_metadata?.role || 'user';
+            
+            console.log('Creating template for user:', { userId, userEmail, userRole });
+            
+            // Single atomic request: POST combined payload to /template with user info
+            const combinedPayload = { 
+                template: templateJson, 
+                send_message: sendMessageJson,
+                user_id: userId,
+                user_email: userEmail,
+                user_role: userRole
+            };
             console.log("SENDING COMBINED PAYLOAD TO /template:", JSON.stringify(combinedPayload, null, 2));
 
             const resp = await fetch('http://localhost:8080/template', {

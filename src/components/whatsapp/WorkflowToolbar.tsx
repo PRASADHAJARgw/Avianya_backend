@@ -1,7 +1,7 @@
 import React, { useRef } from 'react';
 import { Play, Square, Save, Download, Upload, Zap, Settings } from 'lucide-react';
-import { Button } from './ui/button';
-import { Separator } from './ui/separator';
+import { Button } from '../ui/button';
+import { Separator } from '../ui/separator';
 import { useToast } from '../../hooks/use-toast';
 import { useWorkflowStore } from '../../store/workflowStore';
 import { ThemeToggle } from './ThemeToggle';

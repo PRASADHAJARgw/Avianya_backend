@@ -1,8 +1,8 @@
 import { useState } from "react";
-import { Button } from "../ui/button";
-import { Switch } from "../ui/switch";
-import { Badge } from "../ui/badge";
-import { Checkbox } from "../ui/checkbox";
+import { Button } from "../../ui/button";
+import { Switch } from "../../ui/switch";
+import { Badge } from "../../ui/badge";
+import { Checkbox } from "../../ui/checkbox";
 import {
   Table,
   TableBody,
@@ -10,13 +10,13 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "../ui/table";
+} from "../../ui/table";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-} from "../ui/dropdown-menu";
+} from "../../ui/dropdown-menu";
 import { 
   MoreHorizontal,
   Edit,

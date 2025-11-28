@@ -1,0 +1,102 @@
+[
+  {
+    "code": "US",
+    "name": "United States",
+    "phoneCode": "1"
+  },
+  {
+    "code": "IN",
+    "name": "India",
+    "phoneCode": "91"
+  },
+  {
+    "code": "GB",
+    "name": "United Kingdom",
+    "phoneCode": "44"
+  },
+  {
+    "code": "CA",
+    "name": "Canada",
+    "phoneCode": "1"
+  },
+  {
+    "code": "AU",
+    "name": "Australia",
+    "phoneCode": "61"
+  },
+  {
+    "code": "DE",
+    "name": "Germany",
+    "phoneCode": "49"
+  },
+  {
+    "code": "FR",
+    "name": "France",
+    "phoneCode": "33"
+  },
+  {
+    "code": "IT",
+    "name": "Italy",
+    "phoneCode": "39"
+  },
+  {
+    "code": "ES",
+    "name": "Spain",
+    "phoneCode": "34"
+  },
+  {
+    "code": "MX",
+    "name": "Mexico",
+    "phoneCode": "52"
+  },
+  {
+    "code": "BR",
+    "name": "Brazil",
+    "phoneCode": "55"
+  },
+  {
+    "code": "JP",
+    "name": "Japan",
+    "phoneCode": "81"
+  },
+  {
+    "code": "CN",
+    "name": "China",
+    "phoneCode": "86"
+  },
+  {
+    "code": "KR",
+    "name": "South Korea",
+    "phoneCode": "82"
+  },
+  {
+    "code": "SG",
+    "name": "Singapore",
+    "phoneCode": "65"
+  },
+  {
+    "code": "AE",
+    "name": "United Arab Emirates",
+    "phoneCode": "971"
+  },
+  {
+    "code": "SA",
+    "name": "Saudi Arabia",
+    "phoneCode": "966"
+  },
+  {
+    "code": "ZA",
+    "name": "South Africa",
+    "phoneCode": "27"
+  },
+  {
+    "code": "NG",
+    "name": "Nigeria",
+    "phoneCode": "234"
+  },
+  {
+    "code": "PK",
+    "name": "Pakistan",
+    "phoneCode": "92"
+  }
+]

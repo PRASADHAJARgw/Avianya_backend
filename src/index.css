@@ -42,6 +42,14 @@
     --canvas-bg: 240 10% 3.9%;
     --glass-bg: 240 5% 6% / 0.8;
     
+    /* Chat colors */
+    --chat-bg: 0 0% 7%;
+    --message-sent: 0 0% 100%;
+    --message-sent-foreground: 240 10% 3.9%;
+    --message-received: 240 5% 15%;
+    --message-received-foreground: 0 0% 98%;
+    --chat-pattern: 240 5% 10%;
+    
     /* Gradients */
     --gradient-primary: linear-gradient(135deg, hsl(142 76% 36%), hsl(142 76% 28%));
     --gradient-canvas: linear-gradient(135deg, hsl(240 10% 3.9%), hsl(240 8% 5%));
@@ -151,6 +159,14 @@
     --node-border: 240 5.9% 85%;
     --canvas-bg: 240 4.8% 95.9%;
     --glass-bg: 0 0% 100% / 0.8;
+    
+    /* Chat colors - light mode */
+    --chat-bg: 240 4.8% 95.9%;
+    --message-sent: 0 0% 100%;
+    --message-sent-foreground: 240 10% 3.9%;
+    --message-received: 0 0% 95%;
+    --message-received-foreground: 240 10% 3.9%;
+    --chat-pattern: 240 5.9% 90%;
     
     /* Light mode gradients */
     --gradient-primary: linear-gradient(135deg, hsl(142 76% 36%), hsl(142 76% 28%));
