@@ -253,34 +253,10 @@ export default function MessageListClient({ from }: { from: string }) {
                 }
                 // Deduplicate messages by wa_message_id
                 setMessages(prev => {
-                    const prevIds = new Set(prev.map(m => m.wa_message_id).filter(id => id)); // Filter out undefined/null ids
+                    const prevIds = new Set(prev.map(m => m.wa_message_id));
                     const uiMessages = addDateToMessages(messages);
-                    const deduped = uiMessages.filter(m => {
-                        if (!m.wa_message_id) {
-                            console.warn('⚠️ Initial message missing wa_message_id, skipping:', m);
-                            return false;
-                        }
-                        return !prevIds.has(m.wa_message_id);
-                    });
-                    
-                    // Also deduplicate within the new messages themselves
-                    const dedupedSet = new Set();
-                    const finalDeduped = deduped.filter(m => {
-                        if (dedupedSet.has(m.wa_message_id)) {
-                            console.log('🧹 Removing duplicate within initial batch:', m.wa_message_id);
-                            return false;
-                        }
-                        dedupedSet.add(m.wa_message_id);
-                        return true;
-                    });
-                    
-                    console.log('📊 Initial load stats:', {
-                        fetched: messages.length,
-                        afterDedup: finalDeduped.length,
-                        prevCount: prev.length
-                    });
-                    
-                    return [...prev, ...finalDeduped];
+                    const deduped = uiMessages.filter(m => !prevIds.has(m.wa_message_id));
+                    return [...prev, ...deduped];
                 });
                 setTimeout(() => {
                     scrollToBottom();
@@ -325,16 +301,20 @@ export default function MessageListClient({ from }: { from: string }) {
                 const uiMessage = addDateToMessages([backendMessage])[0];
 
                 setMessages(prev => {
-                    if (!uiMessage.wa_message_id) {
-                        console.warn('⚠️ Buffered message missing wa_message_id, skipping:', uiMessage);
-                        return prev;
-                    }
-                    const exists = prev.some(msg => msg.wa_message_id === uiMessage.wa_message_id);
+                    // Check if message already exists (same logic as real-time handler)
+                    const exists = prev.some(msg =>
+                        msg.id === uiMessage.id ||
+                        msg.wa_message_id === uiMessage.wa_message_id ||
+                        (msg.content === uiMessage.content &&
+                            msg.sender === uiMessage.sender &&
+                            Math.abs(new Date(msg.created_at).getTime() - new Date(uiMessage.created_at).getTime()) < 1000)
+                    );
+
                     if (!exists) {
-                        console.log('✅ Added buffered message to UI:', uiMessage.wa_message_id);
+                        console.log('✅ Added buffered message to UI:', uiMessage.id);
                         return [...prev, uiMessage];
                     } else {
-                        console.log('⏭️ Buffered message already exists, skipping:', uiMessage.wa_message_id);
+                        console.log('⚠️ Buffered message already exists, skipping:', uiMessage.id);
                         return prev;
                     }
                 });
@@ -403,13 +383,21 @@ export default function MessageListClient({ from }: { from: string }) {
         onStatusUpdate: (data) => {
             // Update message status instantly
             if (data.wa_message_id && data.status) {
-                console.log('📱 WebSocket: Status update:', data.wa_message_id, '→', data.status);
-                setMessages(prev => 
-                    prev.map(msg => 
-                        msg.wa_message_id === data.wa_message_id 
-                            ? { ...msg, status: data.status! }
-                            : msg
-                    )
+                console.log('� WebSocket: Status update:', data.wa_message_id, '→', data.status);
+                setMessages(prev => {
+                    const prevIds = new Set(prev.map(m => m.wa_message_id));
+                    const uiMessages = addDateToMessages(messages);
+                    const deduped = uiMessages.filter(m => {
+                        if (!m.wa_message_id) {
+                            console.warn('⚠️ Initial message missing wa_message_id, skipping:', m);
+                            return false;
+                        }
+                        return !prevIds.has(m.wa_message_id);
+                    });
+                    const result = [...prev, ...deduped];
+                    console.log('🔍 All wa_message_ids in state after initial load:', result.map(m => m.wa_message_id));
+                    return result;
+                });
                 );
             }
         }
@@ -440,7 +428,7 @@ export default function MessageListClient({ from }: { from: string }) {
                 const scrollBottom = messagesEndRef.current?.scrollHeight ? 
                     messagesEndRef.current.scrollHeight - (messagesEndRef.current.scrollTop || 0) : 0;
                 
-                const prevIds = new Set(stateMessages.map(m => m.wa_message_id).filter(id => id)); // Filter out undefined/null ids
+                const prevIds = new Set(stateMessages.map(m => m.wa_message_id));
                 const deduped = addedDates.filter(m => {
                     if (!m.wa_message_id) {
                         console.warn('⚠️ Additional message missing wa_message_id, skipping:', m);
@@ -448,19 +436,7 @@ export default function MessageListClient({ from }: { from: string }) {
                     }
                     return !prevIds.has(m.wa_message_id);
                 });
-                
-                // Also deduplicate within the new additional messages themselves
-                const dedupedSet = new Set();
-                const finalDeduped = deduped.filter(m => {
-                    if (dedupedSet.has(m.wa_message_id)) {
-                        console.log('🧹 Removing duplicate within additional batch:', m.wa_message_id);
-                        return false;
-                    }
-                    dedupedSet.add(m.wa_message_id);
-                    return true;
-                });
-                
-                const result = [...finalDeduped, ...stateMessages];
+                const result = [...deduped, ...stateMessages];
                 console.log('🔍 All wa_message_ids in state after loading more:', result.map(m => m.wa_message_id));
                 setMessages(result);
                 
@@ -506,45 +482,40 @@ export default function MessageListClient({ from }: { from: string }) {
                                         {(() => {
                                             switch (messageBody.type) {
                                                 case "text":
-                                                    return <ReceivedTextMessageUI textMessage={messageBody as TextMessage} />;
-                                                case "image":
-                                                    return <ReceivedImageMessageUI message={message as unknown as Parameters<typeof ReceivedImageMessageUI>[0]['message']} />;
-                                                case "video":
-                                                    return <ReceivedVideoMessageUI message={message as unknown as Parameters<typeof ReceivedVideoMessageUI>[0]['message']} />;
-                                                case "template":
-                                                    return <ReceivedTemplateMessageUI message={messageBody as TemplateMessage} />;
-                                                case "document":
-                                                    return <ReceivedDocumentMessageUI message={message as unknown as Parameters<typeof ReceivedDocumentMessageUI>[0]['message']} />;
-                                                case "audio":
-                                                case "voice":
-                                                    return (
-                                                        <div className="flex items-center gap-2 p-3 bg-green-50 rounded-lg">
-                                                            <span className="text-2xl">🎵</span>
-                                                            <span className="text-green-700 font-medium">Audio Message</span>
-                                                        </div>
-                                                    );
-                                                case "sticker":
-                                                    return (
-                                                        <div className="flex items-center gap-2 p-3 bg-yellow-50 rounded-lg">
-                                                            <span className="text-2xl">😊</span>
-                                                            <span className="text-yellow-700 font-medium">Sticker</span>
-                                                        </div>
-                                                    );
-                                                case "location":
-                                                    return (
-                                                        <div className="flex items-center gap-2 p-3 bg-blue-50 rounded-lg">
-                                                            <span className="text-2xl">📍</span>
-                                                            <span className="text-blue-700 font-medium">Location</span>
-                                                        </div>
-                                                    );
-                                                case "contact":
-                                                case "contacts":
-                                                    return (
-                                                        <div className="flex items-center gap-2 p-3 bg-purple-50 rounded-lg">
-                                                            <span className="text-2xl">👤</span>
+                                                    return <ReceivedTextMessageUI textMessage={messageBody as TextMessage} />
+                                        if (data.conversation_id && currentConvId && receivedConvId === currentConvId && data.message) {
+                                            console.log('📨 WebSocket: New message received:', data.message);
+                                            const backendMessage: BackendMessage = {
+                                                id: data.message.id.toString(),
+                                                conversation_id: data.message.conversation_id.toString(),
+                                                message_id: data.message.message_id,
+                                                wa_message_id: data.message.wa_message_id || '',
+                                                content: data.message.content,
+                                                message_type: data.message.message_type,
+                                                media_url: data.message.media_url,
+                                                media_caption: data.message.media_caption,
+                                                sender: data.message.sender,
+                                                status: data.message.status,
+                                                created_at: data.message.created_at,
+                                            };
+                                            const uiMessage = addDateToMessages([backendMessage])[0];
+                                            setMessages(prev => {
+                                                if (!uiMessage.wa_message_id) {
+                                                    console.warn('⚠️ Message missing wa_message_id, skipping:', uiMessage);
+                                                    return prev;
+                                                }
+                                                const exists = prev.some(msg => msg.wa_message_id === uiMessage.wa_message_id);
+                                                if (exists) {
+                                                    console.log('⏭️ Message already exists, skipping duplicate:', uiMessage.wa_message_id);
+                                                    return prev;
+                                                }
+                                                console.log('✅ Adding new message to UI:', uiMessage.wa_message_id);
+                                                setTimeout(() => scrollToBottom(), 100);
+                                                return [...prev, uiMessage];
+                                            });
                                                             <span className="text-purple-700 font-medium">Contact</span>
                                                         </div>
-                                                    );
+                                                    )
                                                 default:
                                                     console.warn('Unsupported message type:', messageBody.type);
                                                     return (
@@ -555,7 +526,7 @@ export default function MessageListClient({ from }: { from: string }) {
                                                                 <span className="text-xs text-gray-500">Type: {messageBody.type}</span>
                                                             </div>
                                                         </div>
-                                                    );
+                                                    )
                                             }
                                         })()}
                                         <span className="invisible">ww:ww wm</span>
