@@ -10,6 +10,33 @@ import ReceivedDocumentMessageUI from "./ReceivedDocumentMessageUI"
 import { useSupabase } from "@/contexts/AuthContext"
 import { useWebSocket, WSMessage } from "@/hooks/useWebSocket"
 
+// ✅ FIX 1: SIMPLIFIED TIME FORMATTING
+// using standard Intl.DateTimeFormat is more reliable than manual parsing
+function formatTimeIST(date: Date): string {
+    const formatted = new Intl.DateTimeFormat('en-US', {
+        hour: 'numeric',
+        minute: '2-digit',
+        hour12: true,
+        timeZone: 'UTC' // Changed from 'Asia/Kolkata' to 'UTC'
+    }).format(date).toLowerCase(); // matches "11:08 pm" format
+    
+    console.log('⏰ formatTimeUTC input:', date.toISOString(), '→ output:', formatted);
+    return formatted;
+}
+
+function formatDateIST(date: Date): string {
+    const formatted = new Intl.DateTimeFormat('en-GB', { // en-GB gives DD/MM/YYYY
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+        timeZone: 'UTC' // Changed from 'Asia/Kolkata' to 'UTC'
+    }).format(date);
+    
+    console.log('📅 formatDateUTC input:', date.toISOString(), '→ output:', formatted);
+    return formatted;
+}
+
+
 // Type definitions for messages
 interface MessageJson {
     type: string;
@@ -31,10 +58,10 @@ interface TemplateMessage extends MessageJson {
 }
 
 interface BackendMessage {
-    id: string;
+    id: string; // Database Primary Key
     conversation_id: string;
-    message_id: string;
-    wa_message_id: string;
+    message_id: string; // Internal Message ID
+    wa_message_id: string; // WhatsApp ID (Can be empty!)
     content: string;
     message_type: string;
     media_url?: string;
@@ -44,20 +71,10 @@ interface BackendMessage {
     created_at: string;
 }
 
-interface UIMessage {
-    id: string;
-    conversation_id: string;
-    message_id: string;
-    wa_message_id: string;
-    content: string;
-    message_type: string;
-    media_url?: string;
-    media_caption?: string;
-    sender: string;
-    status: string;
-    created_at: string;
+interface UIMessage extends BackendMessage {
     msgDate: string;
     messageBody: MessageJson;
+    uniqueKey: string; // New field for reliable rendering
 }
 
 function addDateToMessages(messages: BackendMessage[]): UIMessage[] {
@@ -65,305 +82,163 @@ function addDateToMessages(messages: BackendMessage[]): UIMessage[] {
         const messageBody: MessageJson = {
             type: msg.message_type,
             content: msg.content,
-            body: msg.content, // Add body field for text messages
+            body: msg.content,
             to: msg.sender === 'user' ? msg.conversation_id : null,
             from: msg.sender,
             ...(msg.media_url && { media_url: msg.media_url }),
             ...(msg.media_caption && { caption: msg.media_caption }),
         };
 
+        console.log('📨 Message from backend:', {
+            id: msg.id,
+            created_at_raw: msg.created_at,
+            created_at_type: typeof msg.created_at
+        });
+
+        const rawDate = new Date(msg.created_at);
+        console.log('🕐 Parsed date:', {
+            iso: rawDate.toISOString(),
+            local: rawDate.toString(),
+            valid: !isNaN(rawDate.getTime())
+        });
+        
+        // ✅ FIX 2: ROBUST UNIQUE KEY GENERATION
+        // ALWAYS use the database ID as the primary key to ensure uniqueness
+        // This prevents duplicate key errors even if wa_message_id is duplicated in DB
+        const uniqueKey = `db_${msg.id}`;
+
         return {
             ...msg,
-            msgDate: new Date(msg.created_at).toLocaleDateString(),
+            msgDate: formatDateIST(rawDate),
             messageBody,
+            uniqueKey: uniqueKey 
         };
     });
 }
 
 export default function MessageListClient({ from }: { from: string }) {
-    console.log('🎬 MessageListClient RENDERING - from:', from);
-    
     const { supabase } = useSupabase()
     const [stateMessages, setMessages] = useState<UIMessage[]>([])
     const [additionalMessagesLoading, setAdditionalMessagesLoading] = useState(false)
     const [noMoreMessages, setNoMoreMessages] = useState(false)
     const [conversationId, setConversationId] = useState<string | null>(null)
-    const conversationIdRef = useRef<string | null>(null); // Add ref to avoid closure issues
-    const messagesEndRef = useRef<HTMLDivElement>(null);
-    const pendingMessagesRef = useRef<WSMessage[]>([]); // Buffer for messages received before conversationId loads
     
-    console.log('🔍 Current conversationId state:', conversationId);
+    const conversationIdRef = useRef<string | null>(null);
+    const messagesEndRef = useRef<HTMLDivElement>(null);
 
-    // Update ref whenever state changes
     useEffect(() => {
         conversationIdRef.current = conversationId;
-        console.log('🔄 conversationIdRef updated to:', conversationId);
     }, [conversationId]);
-    
-    const scrollToBottom = (bottom: number = 0) => {
+
+    // Helper to keep scroll at bottom
+    const scrollToBottom = (behavior: ScrollBehavior = 'auto') => {
         if (messagesEndRef.current) {
-            messagesEndRef.current.scrollTop = messagesEndRef.current.scrollHeight - bottom;
+            messagesEndRef.current.scrollTo({
+                top: messagesEndRef.current.scrollHeight,
+                behavior: behavior
+            });
         }
     }
 
-    // First, fetch the conversation ID from backend
+    // 1. Fetch Conversation ID
     useEffect(() => {
         async function fetchConversationId() {
-            console.log('🔄 Attempting to fetch conversation ID for:', from);
             try {
                 const { data: { session } } = await supabase.auth.getSession();
                 const token = session?.access_token;
-                
-                if (!token) {
-                    console.error('❌ No auth token found');
-                    return;
-                }
+                if (!token) return;
 
                 const response = await fetch(`http://localhost:8080/api/live-chat/conversation/${from}`, {
-                    headers: {
-                        'Authorization': `Bearer ${token}`,
-                        'Content-Type': 'application/json'
-                    }
+                    headers: { 'Authorization': `Bearer ${token}` }
                 });
-
-                console.log('📡 Conversation fetch response status:', response.status);
 
                 if (response.ok) {
                     const result = await response.json();
-                    console.log('📊 Conversation fetch result:', result);
                     if (result.success && result.conversation) {
-                        const convId = result.conversation.id.toString(); // Ensure it's a string
-                        console.log('✅ Successfully fetched conversation ID:', convId, '(type:', typeof convId, ')');
-                        setConversationId(convId);
-                        
-                        // Process any pending messages that arrived before conversationId was loaded
-                        if (pendingMessagesRef.current.length > 0) {
-                            console.log(`📦 Processing ${pendingMessagesRef.current.length} pending messages`);
-                            pendingMessagesRef.current.forEach(msgData => {
-                                if (msgData.conversation_id && msgData.conversation_id.toString() === convId && msgData.message) {
-                                    const backendMessage: BackendMessage = {
-                                        id: msgData.message.id.toString(),
-                                        conversation_id: msgData.message.conversation_id.toString(),
-                                        message_id: msgData.message.message_id,
-                                        wa_message_id: msgData.message.wa_message_id || '',
-                                        content: msgData.message.content,
-                                        message_type: msgData.message.message_type,
-                                        media_url: msgData.message.media_url,
-                                        media_caption: msgData.message.media_caption,
-                                        sender: msgData.message.sender,
-                                        status: msgData.message.status,
-                                        created_at: msgData.message.created_at,
-                                    };
-                                    const uiMessage = addDateToMessages([backendMessage])[0];
-                                    setMessages(prev => {
-                                        if (!uiMessage.wa_message_id) {
-                                            console.warn('⚠️ Message missing wa_message_id, skipping:', uiMessage);
-                                            return prev;
-                                        }
-                                        const exists = prev.some(msg => msg.wa_message_id === uiMessage.wa_message_id);
-                                        if (!exists) {
-                                            console.log('✅ Adding pending message to UI:', uiMessage.wa_message_id);
-                                            const result = [...prev, uiMessage];
-                                            console.log('🔍 All wa_message_ids in state:', result.map(m => m.wa_message_id));
-                                            return result;
-                                        } else {
-                                            console.log('⏭️ Message already exists, skipping duplicate:', uiMessage.wa_message_id);
-                                            return prev;
-                                        }
-                                    });
-                                }
-                            });
-                            pendingMessagesRef.current = []; // Clear buffer
-                        }
-                    } else {
-                        console.error('❌ Conversation not found in response:', result);
+                        setConversationId(result.conversation.id.toString());
                     }
-                } else {
-                    const errorText = await response.text();
-                    console.error('❌ Failed to fetch conversation. Status:', response.status, 'Response:', errorText);
                 }
             } catch (error) {
-                console.error('❌ Error fetching conversation ID:', error);
+                console.error('Error fetching conversation ID:', error);
             }
         }
-
-        console.log('🚀 Component mounted, fetching conversation ID...');
         fetchConversationId();
     }, [from, supabase]);
 
-    // Monitor conversationId state changes
-    useEffect(() => {
-        console.log('🆔 conversationId state changed:', conversationId);
-    }, [conversationId]);
-
-    // Fetch messages from backend API
-    const fetchMessages = useCallback(async (limit: number = 100, offset: number = 0): Promise<BackendMessage[]> => {
-        if (!conversationId) {
-            console.log('⏳ Waiting for conversation ID...');
-            return [];
-        }
+    // 2. Fetch Messages Function
+    const fetchMessages = useCallback(async (limit: number = 50, offset: number = 0): Promise<BackendMessage[]> => {
+        if (!conversationId) return [];
 
         try {
             const { data: { session } } = await supabase.auth.getSession();
             const token = session?.access_token;
-
-            if (!token) {
-                console.error('❌ No auth token found');
-                return [];
-            }
+            if (!token) return [];
 
             const response = await fetch(
                 `http://localhost:8080/api/live-chat/messages?conversation_id=${conversationId}&limit=${limit}&offset=${offset}`,
-                {
-                    headers: {
-                        'Authorization': `Bearer ${token}`,
-                        'Content-Type': 'application/json'
-                    }
-                }
+                { headers: { 'Authorization': `Bearer ${token}` } }
             );
 
-            if (!response.ok) {
-                console.error(`❌ API error: ${response.status}`);
-                return [];
-            }
-
+            if (!response.ok) return [];
             const result = await response.json();
-            console.log('📨 Fetched messages:', result);
-
-            if (result.success && Array.isArray(result.messages)) {
-                return result.messages;
-            }
-            return [];
+            return result.success && Array.isArray(result.messages) ? result.messages : [];
         } catch (error) {
-            console.error('❌ Error fetching messages:', error);
+            console.error('Error fetching messages:', error);
             return [];
         }
     }, [conversationId, supabase]);
 
-    // Load initial messages when conversation ID is available
+    // 3. Initial Load
     useEffect(() => {
         if (!conversationId) return;
 
         const loadMessages = async () => {
-            try {
-                console.log('📥 Loading initial messages...');
-                const messages = await fetchMessages(100, 0);
-                if (messages.length === 0) {
-                    setNoMoreMessages(true);
+            const messages = await fetchMessages(50, 0);
+            if (messages.length === 0) setNoMoreMessages(true);
+
+            const uiMessages = addDateToMessages(messages);
+            console.log('📥 Initial load - all uniqueKeys:', uiMessages.map(m => m.uniqueKey));
+            
+            // Remove duplicates based on database ID (most reliable)
+            const seen = new Map<string, UIMessage>();
+            const uniqueMessages: UIMessage[] = [];
+            
+            for (const msg of uiMessages) {
+                const key = msg.id?.toString() || msg.uniqueKey;
+                if (!seen.has(key)) {
+                    seen.set(key, msg);
+                    uniqueMessages.push(msg);
+                } else {
+                    console.warn('⚠️ DUPLICATE REMOVED from initial load:', {
+                        uniqueKey: msg.uniqueKey,
+                        id: msg.id,
+                        content: msg.content?.substring(0, 20)
+                    });
                 }
-                // Deduplicate messages by wa_message_id
-                setMessages(prev => {
-                    const prevIds = new Set(prev.map(m => m.wa_message_id).filter(id => id)); // Filter out undefined/null ids
-                    const uiMessages = addDateToMessages(messages);
-                    const deduped = uiMessages.filter(m => {
-                        if (!m.wa_message_id) {
-                            console.warn('⚠️ Initial message missing wa_message_id, skipping:', m);
-                            return false;
-                        }
-                        return !prevIds.has(m.wa_message_id);
-                    });
-                    
-                    // Also deduplicate within the new messages themselves
-                    const dedupedSet = new Set();
-                    const finalDeduped = deduped.filter(m => {
-                        if (dedupedSet.has(m.wa_message_id)) {
-                            console.log('🧹 Removing duplicate within initial batch:', m.wa_message_id);
-                            return false;
-                        }
-                        dedupedSet.add(m.wa_message_id);
-                        return true;
-                    });
-                    
-                    console.log('📊 Initial load stats:', {
-                        fetched: messages.length,
-                        afterDedup: finalDeduped.length,
-                        prevCount: prev.length
-                    });
-                    
-                    return [...prev, ...finalDeduped];
-                });
-                setTimeout(() => {
-                    scrollToBottom();
-                }, 100);
-            } catch (error) {
-                console.error('❌ Error loading messages:', error);
             }
+            
+            if (uniqueMessages.length < uiMessages.length) {
+                console.log('✅ Removed', uiMessages.length - uniqueMessages.length, 'duplicates from initial load');
+            }
+            
+            setMessages(uniqueMessages); // Set only unique messages
+            
+            // Scroll to bottom after a slight delay to ensure rendering
+            setTimeout(() => scrollToBottom('auto'), 100);
         };
 
         loadMessages();
     }, [conversationId, fetchMessages]);
 
-    // Process buffered messages whenever conversationId becomes available
-    useEffect(() => {
-        if (!conversationId || pendingMessagesRef.current.length === 0) return;
-
-        console.log(`🔄 conversationId now available (${conversationId}), processing ${pendingMessagesRef.current.length} buffered messages`);
-        
-        const convId = conversationId.toString();
-        const messagesToProcess = [...pendingMessagesRef.current];
-        pendingMessagesRef.current = []; // Clear buffer immediately to prevent reprocessing
-        
-        messagesToProcess.forEach(msgData => {
-            if (msgData.conversation_id && msgData.conversation_id.toString() === convId && msgData.message) {
-                console.log('✅ Processing buffered message:', msgData.message.wa_message_id);
-                
-                // Use the same structure as real-time WebSocket handler
-                const backendMessage: BackendMessage = {
-                    id: msgData.message.id.toString(),
-                    conversation_id: msgData.message.conversation_id.toString(),
-                    message_id: msgData.message.message_id,
-                    wa_message_id: msgData.message.wa_message_id,
-                    content: msgData.message.content,
-                    message_type: msgData.message.message_type,
-                    media_url: msgData.message.media_url,
-                    media_caption: msgData.message.media_caption,
-                    sender: msgData.message.sender,
-                    status: msgData.message.status,
-                    created_at: msgData.message.created_at,
-                };
-
-                const uiMessage = addDateToMessages([backendMessage])[0];
-
-                setMessages(prev => {
-                    if (!uiMessage.wa_message_id) {
-                        console.warn('⚠️ Buffered message missing wa_message_id, skipping:', uiMessage);
-                        return prev;
-                    }
-                    const exists = prev.some(msg => msg.wa_message_id === uiMessage.wa_message_id);
-                    if (!exists) {
-                        console.log('✅ Added buffered message to UI:', uiMessage.wa_message_id);
-                        return [...prev, uiMessage];
-                    } else {
-                        console.log('⏭️ Buffered message already exists, skipping:', uiMessage.wa_message_id);
-                        return prev;
-                    }
-                });
-            }
-        });
-        
-        setTimeout(() => scrollToBottom(), 100);
-    }, [conversationId]);
-
-    // Real-time WebSocket for instant message and status updates
+    // 4. WebSocket Handler
     const { isConnected } = useWebSocket({
         onNewMessage: (data) => {
-            const currentConvId = conversationIdRef.current; // Use ref instead of state
+            const currentConvId = conversationIdRef.current;
             const receivedConvId = data.conversation_id?.toString();
-            const isMatch = receivedConvId === currentConvId;
-            
-            console.log('🔔 WebSocket: onNewMessage triggered', {
-                received_conversation_id: data.conversation_id,
-                received_as_string: receivedConvId,
-                current_conversation_id: currentConvId,
-                match: isMatch,
-                has_message: !!data.message
-            });
-            
-            // Only process messages for this conversation (ensure conversationId is loaded)
+
             if (data.conversation_id && currentConvId && receivedConvId === currentConvId && data.message) {
-                console.log('📨 WebSocket: New message received:', data.message);
-                // Convert message IDs to strings to match BackendMessage type
-                const backendMessage: BackendMessage = {
+                // Convert WS message to Backend format
+                const backendMsg: BackendMessage = {
                     id: data.message.id.toString(),
                     conversation_id: data.message.conversation_id.toString(),
                     message_id: data.message.message_id,
@@ -376,201 +251,178 @@ export default function MessageListClient({ from }: { from: string }) {
                     status: data.message.status,
                     created_at: data.message.created_at,
                 };
-                const uiMessage = addDateToMessages([backendMessage])[0];
+                
+                const uiMessage = addDateToMessages([backendMsg])[0];
+
                 setMessages(prev => {
-                    // Check if message already exists by multiple criteria
-                    if (!uiMessage.wa_message_id) {
-                        console.warn('⚠️ Message missing wa_message_id, skipping:', uiMessage);
-                        return prev;
-                    }
-                    const exists = prev.some(msg => msg.wa_message_id === uiMessage.wa_message_id);
+                    // Check for duplicate by uniqueKey, database ID, or wa_message_id
+                    const exists = prev.some(msg => 
+                        msg.uniqueKey === uiMessage.uniqueKey || 
+                        msg.id === uiMessage.id ||
+                        (msg.wa_message_id && uiMessage.wa_message_id && msg.wa_message_id === uiMessage.wa_message_id)
+                    );
+                    
                     if (exists) {
-                        console.log('⏭️ Message already exists, skipping duplicate:', uiMessage.wa_message_id);
+                        console.log('🔄 Duplicate message blocked:', {
+                            uniqueKey: uiMessage.uniqueKey,
+                            id: uiMessage.id,
+                            wa_message_id: uiMessage.wa_message_id
+                        });
                         return prev;
                     }
-                    console.log('✅ Adding new message to UI:', uiMessage.wa_message_id);
-                    const result = [...prev, uiMessage];
-                    console.log('🔍 All wa_message_ids in state:', result.map(m => m.wa_message_id));
-                    setTimeout(() => scrollToBottom(), 100);
-                    return result;
+                    
+                    console.log('✅ New message added:', uiMessage.uniqueKey);
+                    setTimeout(() => scrollToBottom('smooth'), 100);
+                    return [...prev, uiMessage];
                 });
-            } else if (data.conversation_id && !currentConvId && data.message) {
-                // Buffer message if conversationId not yet loaded
-                console.log('📦 Buffering message (conversationId not yet loaded)');
-                pendingMessagesRef.current.push(data);
             }
         },
         onStatusUpdate: (data) => {
             // Update message status instantly
-            if (data.wa_message_id && data.status) {
-                console.log('📱 WebSocket: Status update:', data.wa_message_id, '→', data.status);
-                setMessages(prev => 
-                    prev.map(msg => 
-                        msg.wa_message_id === data.wa_message_id 
+            if ((data.message_id || data.wa_message_id) && data.status) {
+                const messageId = data.message_id || data.wa_message_id;
+                console.log('📱 Status update for message_id:', messageId, '→', data.status);
+                setMessages(prev => {
+                    // Find by wa_message_id OR message_id
+                    const targetMsg = prev.find(msg => 
+                        msg.wa_message_id === messageId || msg.message_id === messageId
+                    );
+                    if (!targetMsg || targetMsg.status === data.status) {
+                        return prev;
+                    }
+                    return prev.map(msg => 
+                        (msg.wa_message_id === messageId || msg.message_id === messageId)
                             ? { ...msg, status: data.status! }
                             : msg
-                    )
-                );
+                    );
+                });
             }
         }
     });
 
-    // Show WebSocket connection status
-    useEffect(() => {
-        if (isConnected) {
-            console.log('✅ WebSocket connected for real-time updates');
-        } else {
-            console.log('🔌 WebSocket disconnected');
-        }
-    }, [isConnected]);
-
-    // Load additional older messages
+    // 5. Load Additional Messages (Infinite Scroll Up)
     const loadAdditionalMessages = useCallback(async () => {
-        if (stateMessages.length === 0 || noMoreMessages) return;
+        if (additionalMessagesLoading || noMoreMessages) return;
+
+        setAdditionalMessagesLoading(true);
+        // Capture current scroll height before adding new items
+        const container = messagesEndRef.current;
+        const previousScrollHeight = container ? container.scrollHeight : 0;
+        const previousScrollTop = container ? container.scrollTop : 0;
 
         try {
-            setAdditionalMessagesLoading(true);
             const offset = stateMessages.length;
-            const additionalMessages = await fetchMessages(100, offset);
+            const additionalMessages = await fetchMessages(50, offset);
 
             if (additionalMessages.length === 0) {
                 setNoMoreMessages(true);
             } else {
-                const addedDates = addDateToMessages(additionalMessages);
-                const scrollBottom = messagesEndRef.current?.scrollHeight ? 
-                    messagesEndRef.current.scrollHeight - (messagesEndRef.current.scrollTop || 0) : 0;
-                
-                const prevIds = new Set(stateMessages.map(m => m.wa_message_id).filter(id => id)); // Filter out undefined/null ids
-                const deduped = addedDates.filter(m => {
-                    if (!m.wa_message_id) {
-                        console.warn('⚠️ Additional message missing wa_message_id, skipping:', m);
-                        return false;
+                const newUiMessages = addDateToMessages(additionalMessages);
+
+                setMessages(prev => {
+                    const existingKeys = new Set(prev.map(m => m.uniqueKey));
+                    // ✅ FIX 3: DEDUPLICATION LOGIC
+                    // Filter items that are NOT in the existing list
+                    const uniqueNewMessages = newUiMessages.filter(m => !existingKeys.has(m.uniqueKey));
+                    
+                    if (uniqueNewMessages.length === 0) {
+                        // If we fetched messages but they are all duplicates, 
+                        // we must mark noMoreMessages to stop the loop
+                        setNoMoreMessages(true); 
+                        return prev;
                     }
-                    return !prevIds.has(m.wa_message_id);
+
+                    return [...uniqueNewMessages, ...prev]; // Prepend new messages
                 });
-                
-                // Also deduplicate within the new additional messages themselves
-                const dedupedSet = new Set();
-                const finalDeduped = deduped.filter(m => {
-                    if (dedupedSet.has(m.wa_message_id)) {
-                        console.log('🧹 Removing duplicate within additional batch:', m.wa_message_id);
-                        return false;
-                    }
-                    dedupedSet.add(m.wa_message_id);
-                    return true;
-                });
-                
-                const result = [...finalDeduped, ...stateMessages];
-                console.log('🔍 All wa_message_ids in state after loading more:', result.map(m => m.wa_message_id));
-                setMessages(result);
-                
+
+                // ✅ FIX 4: RESTORE SCROLL POSITION
+                // Adjust scroll position so the user doesn't lose their place
                 setTimeout(() => {
-                    scrollToBottom(scrollBottom);
-                }, 100);
+                    if (container) {
+                        const newScrollHeight = container.scrollHeight;
+                        container.scrollTop = newScrollHeight - previousScrollHeight + previousScrollTop;
+                    }
+                }, 0);
             }
         } catch (error) {
-            console.error('❌ Error loading additional messages:', error);
+            console.error('Error loading additional messages:', error);
         } finally {
             setAdditionalMessagesLoading(false);
         }
-    }, [stateMessages, noMoreMessages, fetchMessages]);
+    }, [stateMessages, noMoreMessages, additionalMessagesLoading, fetchMessages]);
 
+    // Scroll Handler
     const onDivScroll = useCallback((event: React.UIEvent<HTMLDivElement>) => {
         const div = event.currentTarget;
-        if (!additionalMessagesLoading && !noMoreMessages && div.scrollTop < 100) {
+        // Only load if near top AND not already loading AND has more messages
+        if (div.scrollTop < 100 && !additionalMessagesLoading && !noMoreMessages) {
             loadAdditionalMessages();
         }
     }, [additionalMessagesLoading, noMoreMessages, loadAdditionalMessages]);
 
     return (
-        <div className="px-16 py-2 overflow-y-auto h-full" ref={messagesEndRef} onScroll={onDivScroll}>
+        <div 
+        // <div
+  className=" overflow-y-auto  overflow-x-auto bg-[url('/wa_bg.png')]"
+  ref={messagesEndRef}
+  onScroll={onDivScroll}
+            // className="px-4 md:px-16 py-2 overflow-y-auto h-full relative"
+            // ref={messagesEndRef} 
+            // onScroll={onDivScroll}
+            style={{
+                backgroundImage: 'url(/wa_bg.png)',
+                backgroundSize: 'cover',
+                backgroundPosition: 'center',
+                backgroundColor: '#e5ddd5',
+            }}
+        >
             {stateMessages.map((message, index) => {
-                const messageBody = message.messageBody;
                 const messageDateTime = new Date(message.created_at);
-                const showDateHeader = index === 0 || message.msgDate !== stateMessages[index - 1].msgDate;
-                const senderChanged = index === 0 || message.sender !== stateMessages[index - 1].sender;
+                const showDateHeader = index === 0 || message.msgDate !== stateMessages[index - 1]?.msgDate;
+                const senderChanged = index === 0 || message.sender !== stateMessages[index - 1]?.sender;
 
                 return (
-                    <div key={message.id}>
+                    <div key={message.uniqueKey}> {/* Use uniqueKey here */}
                         {showDateHeader && (
-                            <div className="flex justify-center my-2">
-                                <span className="p-2 rounded-md bg-system-message-background text-system-message-text text-sm">
+                            <div className="flex justify-center my-4 sticky top-2 z-10">
+                                <span className="px-3 py-1 rounded-lg bg-white/80 shadow-sm text-gray-600 text-xs font-medium backdrop-blur-sm">
                                     {message.msgDate}
                                 </span>
                             </div>
                         )}
                         <div className="my-1">
                             <TailWrapper showTail={senderChanged} isSent={message.sender === 'user'}>
-                                <div className="px-2 pt-2 flex flex-col items-end gap-1 relative">
-                                    <div className="pb-2 inline-block">
-                                        {(() => {
-                                            switch (messageBody.type) {
-                                                case "text":
-                                                    return <ReceivedTextMessageUI textMessage={messageBody as TextMessage} />;
-                                                case "image":
-                                                    return <ReceivedImageMessageUI message={message as unknown as Parameters<typeof ReceivedImageMessageUI>[0]['message']} />;
-                                                case "video":
-                                                    return <ReceivedVideoMessageUI message={message as unknown as Parameters<typeof ReceivedVideoMessageUI>[0]['message']} />;
-                                                case "template":
-                                                    return <ReceivedTemplateMessageUI message={messageBody as TemplateMessage} />;
-                                                case "document":
-                                                    return <ReceivedDocumentMessageUI message={message as unknown as Parameters<typeof ReceivedDocumentMessageUI>[0]['message']} />;
-                                                case "audio":
-                                                case "voice":
-                                                    return (
-                                                        <div className="flex items-center gap-2 p-3 bg-green-50 rounded-lg">
-                                                            <span className="text-2xl">🎵</span>
-                                                            <span className="text-green-700 font-medium">Audio Message</span>
-                                                        </div>
-                                                    );
-                                                case "sticker":
-                                                    return (
-                                                        <div className="flex items-center gap-2 p-3 bg-yellow-50 rounded-lg">
-                                                            <span className="text-2xl">😊</span>
-                                                            <span className="text-yellow-700 font-medium">Sticker</span>
-                                                        </div>
-                                                    );
-                                                case "location":
-                                                    return (
-                                                        <div className="flex items-center gap-2 p-3 bg-blue-50 rounded-lg">
-                                                            <span className="text-2xl">📍</span>
-                                                            <span className="text-blue-700 font-medium">Location</span>
-                                                        </div>
-                                                    );
-                                                case "contact":
-                                                case "contacts":
-                                                    return (
-                                                        <div className="flex items-center gap-2 p-3 bg-purple-50 rounded-lg">
-                                                            <span className="text-2xl">👤</span>
-                                                            <span className="text-purple-700 font-medium">Contact</span>
-                                                        </div>
-                                                    );
-                                                default:
-                                                    console.warn('Unsupported message type:', messageBody.type);
-                                                    return (
-                                                        <div className="flex items-center gap-2 p-3 bg-gray-50 rounded-lg border border-gray-200">
-                                                            <span className="text-2xl">❓</span>
-                                                            <div className="flex flex-col">
-                                                                <span className="text-gray-700 font-medium">Unsupported message type</span>
-                                                                <span className="text-xs text-gray-500">Type: {messageBody.type}</span>
-                                                            </div>
-                                                        </div>
-                                                    );
+                                <div className="px-2 pt-2 flex flex-col relative min-w-[120px]">
+                                    {/* Render Message Components based on type */}
+                                    <div className="pb-4">
+                                         {(() => {
+                                            const body = message.messageBody;
+                                            switch (body.type) {
+                                                case "text": return <ReceivedTextMessageUI textMessage={body as TextMessage} />;
+                                                case "image": return <ReceivedImageMessageUI message={message as unknown as Parameters<typeof ReceivedImageMessageUI>[0]['message']} />;
+                                                case "video": return <ReceivedVideoMessageUI message={message as unknown as Parameters<typeof ReceivedVideoMessageUI>[0]['message']} />;
+                                                case "template": return <ReceivedTemplateMessageUI message={body as TemplateMessage} />;
+                                                case "document": return <ReceivedDocumentMessageUI message={message as unknown as Parameters<typeof ReceivedDocumentMessageUI>[0]['message']} />;
+                                                default: return <div>Unsupported message type</div>
                                             }
                                         })()}
-                                        <span className="invisible">ww:ww wm</span>
                                     </div>
-                                    <span className="text-xs pb-2 pe-2 text-bubble-meta absolute bottom-0 end-0 flex items-center gap-1">
-                                        {messageDateTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true }).toLowerCase()}
-                                        {/* Status indicator for sent messages */}
+                                    
+                                    {/* Timestamp & Status */}
+                                    <span className="text-[11px] text-gray-500 absolute bottom-1 right-2 flex items-center gap-1">
+                                        {formatTimeIST(messageDateTime)}
                                         {message.sender === 'user' && (
-                                            <>
-                                                {message.status === 'pending' && <span className="text-gray-400 text-[10px]">🕐</span>}
-                                                {message.status === 'sent' && <span className="text-gray-400 text-[10px]">✓</span>}
-                                                {message.status === 'delivered' && <span className="text-blue-400 text-[10px]">✓✓</span>}
-                                                {message.status === 'read' && <span className="text-blue-500 text-[10px]">✓✓</span>}
-                                                {message.status === 'failed' && <span className="text-red-500 text-[10px]">⚠️</span>}
-                                            </>
+                                            <span className="ml-1">
+                                                {message.status === 'read' ? (
+                                                    <span className="text-blue-500 font-bold">✓✓</span>
+                                                ) : message.status === 'delivered' ? (
+                                                    <span className="text-gray-400">✓✓</span>
+                                                ) : message.status === 'sent' ? (
+                                                    <span className="text-gray-400">✓</span>
+                                                ) : (
+                                                    <span className="text-gray-400">🕒</span>
+                                                )}
+                                            </span>
                                         )}
                                     </span>
                                 </div>
@@ -579,6 +431,11 @@ export default function MessageListClient({ from }: { from: string }) {
                     </div>
                 )
             })}
+            {additionalMessagesLoading && (
+                <div className="absolute top-2 left-0 right-0 flex justify-center">
+                    <div className="bg-white rounded-full p-2 shadow-md">Loading...</div>
+                </div>
+            )}
         </div>
     )
 }

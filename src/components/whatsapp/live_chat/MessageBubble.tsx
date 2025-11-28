@@ -6,6 +6,24 @@ interface MessageBubbleProps {
   message: Message;
 }
 
+// Format time in IST 12-hour format with AM/PM (e.g., "10:34 pm")
+function formatTimeIST(date: Date): string {
+  // Create a new date object to avoid mutating the original
+  const utcDate = new Date(date);
+  
+  // Add 5 hours 30 minutes (19800000 milliseconds) to convert UTC to IST
+  const istOffset = 5.5 * 60 * 60 * 1000; // 5 hours 30 minutes in milliseconds
+  const istDate = new Date(utcDate.getTime() + istOffset);
+  
+  let hours = istDate.getUTCHours(); // Use UTC hours since we already added the offset
+  const minutes = istDate.getUTCMinutes(); // Use UTC minutes since we already added the offset
+  const ampm = hours >= 12 ? 'pm' : 'am';
+  hours = hours % 12;
+  hours = hours ? hours : 12; // 0 should be 12
+  const minutesStr = minutes < 10 ? '0' + minutes : minutes;
+  return `${hours}:${minutesStr} ${ampm}`;
+}
+
 const MessageBubble = ({ message }: MessageBubbleProps) => {
   const isSent = message.sender === 'user';
 
@@ -97,7 +115,7 @@ const MessageBubble = ({ message }: MessageBubbleProps) => {
           isSent ? 'text-message-sent-foreground/70' : 'text-muted-foreground'
         }`}>
           <span className="text-xs">
-            {format(message.timestamp, 'HH:mm')}
+            {formatTimeIST(message.timestamp)}
           </span>
           {isSent && (
             <span className="flex-shrink-0">

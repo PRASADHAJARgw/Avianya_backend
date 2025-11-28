@@ -19,7 +19,9 @@ export interface WSMessage {
     created_at: string;
   };
   wa_message_id?: string;
+  message_id?: string; // Add this for status_update messages
   status?: string;
+  user_id?: string;
 }
 
 interface UseWebSocketOptions {

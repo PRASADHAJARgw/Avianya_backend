@@ -50,6 +50,13 @@
     --message-received-foreground: 0 0% 98%;
     --chat-pattern: 240 5% 10%;
     
+    /* WhatsApp Message Bubble Colors */
+    --outgoing-background: #dcf8c6; /* Light green for sent messages */
+    --incoming-background: #ffffff; /* White for received messages */
+    --bubble-meta: #666666; /* Gray for timestamps and status */
+    --system-message-background: rgba(0, 0, 0, 0.1);
+    --system-message-text: #666666;
+    
     /* Gradients */
     --gradient-primary: linear-gradient(135deg, hsl(142 76% 36%), hsl(142 76% 28%));
     --gradient-canvas: linear-gradient(135deg, hsl(240 10% 3.9%), hsl(240 8% 5%));
@@ -168,6 +175,13 @@
     --message-received-foreground: 240 10% 3.9%;
     --chat-pattern: 240 5.9% 90%;
     
+    /* WhatsApp Message Bubble Colors - Light Mode */
+    --outgoing-background: #dcf8c6; /* Light green for sent messages */
+    --incoming-background: #ffffff; /* White for received messages */
+    --bubble-meta: #666666; /* Gray for timestamps and status */
+    --system-message-background: rgba(0, 0, 0, 0.1);
+    --system-message-text: #666666;
+    
     /* Light mode gradients */
     --gradient-primary: linear-gradient(135deg, hsl(142 76% 36%), hsl(142 76% 28%));
     --gradient-canvas: linear-gradient(135deg, hsl(240 4.8% 95.9%), hsl(240 5.9% 90%));
@@ -225,6 +239,34 @@
   
   .transition-smooth {
     transition: var(--transition-smooth);
+  }
+  
+  /* WhatsApp Message Bubble Styles */
+  .bg-outgoing-background {
+    background-color: var(--outgoing-background);
+    color: #000000;
+  }
+  
+  .bg-incoming-background {
+    background-color: var(--incoming-background);
+    color: #000000;
+    border: 1px solid #e5e5e5;
+  }
+  
+  .text-bubble-meta {
+    color: var(--bubble-meta);
+  }
+  
+  .bg-system-message-background {
+    background-color: var(--system-message-background);
+  }
+  
+  .text-system-message-text {
+    color: var(--system-message-text);
+  }
+  
+  .shadow-message {
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
   }
 }
 .react-flow__attribution {

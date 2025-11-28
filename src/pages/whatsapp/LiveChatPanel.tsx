@@ -34,18 +34,26 @@ const LiveChatContent = ({ user }: { user: User | null }) => {
   }, [rawWaId, selectedContact?.wa_id]);
 
   return (
-    <div className="flex flex-col h-full w-full bg-background overflow-hidden">
+    <div
+      className="flex flex-col h-full w-full overflow-hidden"
+      style={{
+        backgroundImage: 'url(/src/assets/images/IMG_3298.jpg)',
+        backgroundRepeat: 'repeat',
+        backgroundSize: 'cover',
+        backgroundPosition: 'center',
+      }}
+    >
       {/* WhatsApp Navigation */}
       <WhatsAppNavigation />
 
       {/* Chat Area - Responsive layout */}
       <div className="flex flex-1 overflow-hidden">
         {/* Contact List Sidebar - Responsive width */}
-        <div className="w-full sm:w-80 md:w-96 lg:w-[400px] xl:w-[450px] border-r bg-white flex-shrink-0 max-w-full max-h-[calc(100vh-200px)]">
+        <div className="w-full sm:w-64 md:w-72 lg:w-80 xl:w-80 border-r bg-white flex-shrink-0 max-w-full max-h-[calc(100vh-100px)]">
           <div className="h-full overflow-hidden flex flex-col">
-            <div className="p-4 border-b bg-gray-50 flex-shrink-0">
-              <h3 className="font-semibold text-gray-900 text-sm">Active Conversations</h3>
-              <p className="text-xs text-gray-500 mt-1">Click on a contact to start chatting</p>
+            <div className="p-2 border-b bg-gray-50 flex-shrink-0">
+              <h3 className="font-medium text-gray-900 text-xs">Active Conversations</h3>
+              <p className="text-xs text-gray-500 mt-0.5">Click on a contact to start chatting</p>
             </div>
             <div className="flex-1 overflow-y-auto">
               <ChatContactsClient />
