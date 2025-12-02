@@ -52,7 +52,7 @@ function RootRoutes() {
       <Routes>
         <Route path="/" element={<LiveChatLogin />} />
         <Route path="/login" element={<LiveChatLogin />} />
-        <Route path="/signup" element={<Signup />} />
+        <Route path="/signup" element={<LiveChatLogin />} />
         <Route path="/wa/live-chat/login" element={<LiveChatLogin />} />
         <Route path="/wa/live-chat/forgot-password" element={<ForgotPassword />} />
         <Route path="*" element={<LiveChatLogin />} />

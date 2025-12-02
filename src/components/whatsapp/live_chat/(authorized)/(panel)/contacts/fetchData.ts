@@ -19,56 +19,22 @@ export async function fetchData(supabase: SupabaseClient, options: {
     });
 
     try {
-        console.log('🏭 Creating ContactBrowserFactory instance...');
-        const contactRepository = ContactBrowserFactory.getInstance(supabase);
-        console.log('✅ ContactRepository instance created');
-
-        const limit = options.pageSize;
-        const offset = options.pageSize * options.pageIndex;
-        let filter: ContactFilterArray | undefined = undefined
-
-        if (options.searchFilter) {
-            console.log(`🔍 Creating search filter for: "${options.searchFilter}"`);
-            filter = [];
-            // Try both 'name' and 'profile_name' fields since database schema might vary
-            filter.push({
-                column: "name",
-                operator: "ilike",
-                value: `%${options.searchFilter}%`
-            });
-            // Add alternative search on profile_name if it exists
-            console.log('🔍 Filter created:', filter);
+        // Get selected WABA ID from localStorage or context (example: localStorage)
+        const waba_id = localStorage.getItem('selected_waba_id') || '';
+        if (!waba_id) {
+            console.warn('⚠️ No WABA ID selected, cannot fetch contacts');
+            return { rows: [], pageCount: 0 };
         }
-
-        console.log('🔄 Calling getContacts with:');
-        console.log('  - Filter:', filter);
-        console.log('  - Sort: created_at DESC');
-        console.log('  - Pagination:', { limit, offset });
-        console.log('  - Include count: true');
-
-        const result = await contactRepository.getContacts(
-            filter,
-            { column: 'created_at', options: { ascending: false } },
-            { limit: limit, offset: offset},
-            true,
-        );
-
-        console.log('✅ getContacts result:', {
-            rowsCount: result.rows?.length || 0,
-            totalCount: result.itemsCount,
-            firstRow: result.rows?.[0] || null
-        });
-
-        const pageCount = result.itemsCount ? Math.ceil(result.itemsCount / itemsPerPage) : -1;
-        console.log(`📄 Page calculation: ${result.itemsCount} total items, ${itemsPerPage} per page = ${pageCount} pages`);
-
-        console.log('✅ fetchData completed successfully');
+        // Fetch contacts from Go backend API
+        const contacts = await (await import('@/lib/repositories/contacts/ContactBrowserRepository')).ContactBrowserRepository.fetchContactsFromGoAPI(waba_id);
+        const pageCount = contacts.length ? Math.ceil(contacts.length / itemsPerPage) : -1;
+        console.log('✅ fetchData completed successfully (Go API)');
         return {
-            rows: result.rows,
+            rows: contacts,
             pageCount
         };
     } catch (error) {
-        console.error('❌ Error in fetchData:', error);
+        console.error('❌ Error in fetchData (Go API):', error);
         return {
             rows: [],
             pageCount: 0

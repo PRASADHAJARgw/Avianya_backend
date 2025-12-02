@@ -10,6 +10,36 @@ import {
 } from "./ContactRepository";
 
 export class ContactBrowserRepository implements ContactRepository {
+  // Fetch contacts from Go backend API
+  // Fetch contacts from Go backend API
+  static async fetchContactsFromGoAPI(waba_id: string): Promise<Contact[]> {
+    try {
+      const url = `http://localhost:8080/api/contacts?waba_id=${encodeURIComponent(waba_id)}`;
+      const response = await fetch(url);
+      if (!response.ok) {
+        console.error('❌ Error fetching contacts from Go API:', response.statusText);
+        return [];
+      }
+      const apiContacts = await response.json();
+      console.log('✅ Contacts fetched from Go API:', apiContacts);
+      // Map API fields to Contact type
+      const contacts: Contact[] = apiContacts.map((c: any) => ({
+        wa_id: c.customer_phone || c.display_phone_number || '',
+        name: c.customer_name || '',
+        phone_number: c.display_phone_number || '',
+        last_message_text: c.last_message || '',
+        last_message_at: c.last_message_time || null,
+        unread_count: typeof c.unread_count === 'number' ? c.unread_count : Number(c.unread_count) || 0,
+        status: (c.status && c.status.toLowerCase() === 'active') ? 'active' : 'inactive',
+        created_at: c.created_at || '',
+        in_chat: false,
+      }));
+      return contacts;
+    } catch (error) {
+      console.error('❌ Exception fetching contacts from Go API:', error);
+      return [];
+    }
+  }
   constructor(private supabase: SupabaseClient) {
     console.log('🔧 ContactBrowserRepository initialized with Supabase client');
   }

@@ -53,33 +53,36 @@ export default function ContactsClient() {
                 ),
             },
             {
-                accessorKey: "profile_name",
+                accessorKey: "name",
                 header: 'Name',
-                size: 280,
-                cell: ({ row }) => <div className="font-medium">{row.getValue("profile_name")}</div>,
+                size: 180,
+                cell: ({ row }) => <div className="font-medium">{row.getValue("name")}</div>,
+            },
+            {
+                accessorKey: "unread_count",
+                header: 'Unread',
+                size: 80,
+                cell: ({ row }) => <Badge variant="outline" className="text-xs">{row.getValue("unread_count")}</Badge>,
+            },
+            {
+                accessorKey: "status",
+                header: 'Status',
+                size: 120,
+                cell: ({ row }) => <span className={`text-xs font-semibold ${row.getValue("status") === 'active' ? 'text-green-600' : 'text-gray-400'}`}>{row.getValue("status")}</span>,
+            },
+            {
+                accessorKey: "last_message_text",
+                header: 'Last Message',
+                size: 220,
+                cell: ({ row }) => <span className="text-xs text-muted-foreground">{row.getValue("last_message_text")}</span>,
             },
             {
                 accessorKey: "created_at",
                 header: 'Created At',
-                size: 280,
+                size: 120,
                 cell: ({ row }) => {
                     const date = new Date(row.getValue("created_at"));
-                    return <div className="text-sm text-gray-500">{date.toLocaleDateString()}</div>
-                },
-            },
-            {
-                accessorKey: "tags",
-                header: 'Tags',
-                size: 280,
-                cell: ({ row }) => {
-                    const tags = (row.getValue('tags') as unknown as string[]) || [];
-                    return (
-                        <div className="flex gap-1 flex-wrap">
-                            {tags.map((tag, idx) => (
-                                <Badge key={idx} variant="secondary" className="text-xs">{tag}</Badge>
-                            ))}
-                        </div>
-                    )
+                    return <div className="text-xs text-gray-500">{date.toLocaleDateString()}</div>
                 },
             },
             {
@@ -93,7 +96,7 @@ export default function ContactsClient() {
                             <Button 
                                 variant="outline" 
                                 size="sm"
-                                onClick={() => navigate('/wa/live-chat/chats')}
+                                onClick={() => navigate(`/wa/live-chat/chats/${contact.wa_id}`)}
                                 className="gap-1"
                             >
                                 <MessageSquare className="h-3 w-3" />
@@ -109,7 +112,7 @@ export default function ContactsClient() {
                                 <DropdownMenuContent align="end">
                                     <DropdownMenuLabel>Actions</DropdownMenuLabel>
                                     <DropdownMenuSeparator />
-                                    <DropdownMenuItem onClick={() => navigate('/wa/live-chat/chats')}>
+                                    <DropdownMenuItem onClick={() => navigate(`/wa/live-chat/chats/${contact.wa_id}`)}>
                                         Open Chat
                                     </DropdownMenuItem>
                                     <DropdownMenuItem>Edit Contact</DropdownMenuItem>
@@ -262,28 +265,34 @@ export default function ContactsClient() {
                             <Card 
                                 key={contact.wa_id} 
                                 className="hover:shadow-lg transition-shadow cursor-pointer"
-                                onClick={() => navigate('/wa/live-chat/chats')}
+                                onClick={() => navigate(`/wa/live-chat/chats/${contact.wa_id}`)}
                             >
                                 <CardContent className="p-4">
                                     <div className="flex items-start gap-3">
                                         <Avatar className="h-12 w-12">
                                             <AvatarImage src={contact.profile_pic_url} />
                                             <AvatarFallback className="bg-gradient-to-br from-blue-500 to-purple-600 text-white">
-                                                {getInitials(contact.name || contact.profile_name || 'Unknown')}
+                                                {getInitials(contact.name || contact.wa_id || 'Unknown')}
                                             </AvatarFallback>
                                         </Avatar>
                                         <div className="flex-1 min-w-0">
                                             <h3 className="font-semibold truncate">
-                                                {contact.name || contact.profile_name || contact.wa_id || 'Unknown'}
+                                                {contact.name || contact.wa_id || 'Unknown'}
                                             </h3>
                                             <div className="flex items-center gap-1 text-sm text-muted-foreground mt-1">
                                                 <Phone className="h-3 w-3" />
                                                 <span className="truncate">{contact.wa_id}</span>
                                             </div>
+                                            <div className="flex gap-2 mt-2">
+                                                <Badge variant="outline" className="text-xs">Unread: {contact.unread_count}</Badge>
+                                                <span className={`text-xs font-semibold ${contact.status === 'active' ? 'text-green-600' : 'text-gray-400'}`}>{contact.status}</span>
+                                            </div>
+                                            <div className="text-xs text-muted-foreground mt-2">
+                                                Last: {contact.last_message_text || 'No message'}
+                                            </div>
                                             <div className="text-xs text-muted-foreground mt-2">
                                                 Added {formatDate(contact.created_at)}
                                             </div>
-                                            {/* Tags removed - not in Contact type */}
                                         </div>
                                     </div>
                                     <div className="mt-3 pt-3 border-t flex gap-2">
@@ -293,7 +302,7 @@ export default function ContactsClient() {
                                             className="flex-1 gap-2"
                                             onClick={(e) => {
                                                 e.stopPropagation();
-                                                navigate('/wa/live-chat/chats');
+                                                navigate(`/wa/live-chat/chats/${contact.wa_id}`);
                                             }}
                                         >
                                             <MessageSquare className="h-3 w-3" />

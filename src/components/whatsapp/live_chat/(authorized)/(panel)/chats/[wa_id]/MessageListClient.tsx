@@ -17,10 +17,10 @@ function formatTimeIST(date: Date): string {
         hour: 'numeric',
         minute: '2-digit',
         hour12: true,
-        timeZone: 'UTC' // Changed from 'Asia/Kolkata' to 'UTC'
+        timeZone: 'UTC'
     }).format(date).toLowerCase(); // matches "11:08 pm" format
     
-    console.log('⏰ formatTimeUTC input:', date.toISOString(), '→ output:', formatted);
+    console.log('⏰ formatTimeIST input:', date.toISOString(), '→ output:', formatted);
     return formatted;
 }
 
@@ -29,11 +29,30 @@ function formatDateIST(date: Date): string {
         day: '2-digit',
         month: '2-digit',
         year: 'numeric',
-        timeZone: 'UTC' // Changed from 'Asia/Kolkata' to 'UTC'
+        timeZone: 'UTC'
     }).format(date);
     
-    console.log('📅 formatDateUTC input:', date.toISOString(), '→ output:', formatted);
+    console.log('📅 formatDateIST input:', date.toISOString(), '→ output:', formatted);
     return formatted;
+}
+
+interface ConversationData {
+    id: string;
+    customer_name?: string;
+    customer_phone?: string;
+    source?: string;
+    status?: string;
+    last_active?: string;
+    created_at?: string;
+    template_messages?: number;
+    session_messages?: number;
+    unresolved_queries?: number;
+}
+
+interface JourneyEvent {
+    action: string;
+    actor?: string;
+    timestamp: string;
 }
 
 
@@ -122,6 +141,8 @@ export default function MessageListClient({ from }: { from: string }) {
     const [additionalMessagesLoading, setAdditionalMessagesLoading] = useState(false)
     const [noMoreMessages, setNoMoreMessages] = useState(false)
     const [conversationId, setConversationId] = useState<string | null>(null)
+    const [conversationData, setConversationData] = useState<ConversationData | null>(null)
+    const [customerJourney, setCustomerJourney] = useState<JourneyEvent[]>([])
     
     const conversationIdRef = useRef<string | null>(null);
     const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -361,21 +382,19 @@ export default function MessageListClient({ from }: { from: string }) {
     }, [additionalMessagesLoading, noMoreMessages, loadAdditionalMessages]);
 
     return (
-        <div 
-        // <div
-  className=" overflow-y-auto  overflow-x-auto bg-[url('/wa_bg.png')]"
-  ref={messagesEndRef}
-  onScroll={onDivScroll}
-            // className="px-4 md:px-16 py-2 overflow-y-auto h-full relative"
-            // ref={messagesEndRef} 
-            // onScroll={onDivScroll}
-            style={{
-                backgroundImage: 'url(/wa_bg.png)',
-                backgroundSize: 'cover',
-                backgroundPosition: 'center',
-                backgroundColor: '#e5ddd5',
-            }}
-        >
+        <div className="flex overflow-y-auto overflow-x-auto">
+            {/* Chat Container */}
+            <div 
+                className="flex-1 overflow-y-auto overflow-x-hidden bg-[url('/wa_bg.png')]"
+                ref={messagesEndRef}
+                onScroll={onDivScroll}
+                style={{
+                    backgroundImage: 'url(/wa_bg.png)',
+                    backgroundSize: 'cover',
+                    backgroundPosition: 'center',
+                    backgroundColor: '#e5ddd5',
+                }}
+            >
             {stateMessages.map((message, index) => {
                 const messageDateTime = new Date(message.created_at);
                 const showDateHeader = index === 0 || message.msgDate !== stateMessages[index - 1]?.msgDate;
@@ -436,6 +455,103 @@ export default function MessageListClient({ from }: { from: string }) {
                     <div className="bg-white rounded-full p-2 shadow-md">Loading...</div>
                 </div>
             )}
+            </div>
+
+            {/* Chat Profile Panel - Right Sidebar */}
+            <div className="hidden md:flex w-80 bg-white border-l border-gray-200 flex-col overflow-y-auto">
+                {/* Profile Header */}
+                <div className="p-4 border-b border-gray-200">
+                    <div className="flex items-center gap-3 mb-2">
+                        <div className="w-12 h-12 bg-yellow-400 rounded-full flex items-center justify-center font-bold text-lg">
+                            {(conversationData?.customer_name || 'U')[0].toUpperCase()}
+                        </div>
+                        <div>
+                            <h2 className="font-bold text-gray-800">{conversationData?.customer_name || 'User'}</h2>
+                            <p className="text-sm text-gray-600">{conversationData?.customer_phone || from}</p>
+                        </div>
+                    </div>
+                </div>
+
+                {/* Status Section */}
+                <div className="p-4 border-b border-gray-200">
+                    <div className="text-sm font-semibold text-gray-800 mb-2">Status</div>
+                    <div className="grid grid-cols-2 gap-2 text-xs text-gray-700">
+                        <div><span className="font-medium">Status:</span> <span className="text-teal-600">{conversationData?.status || 'Active'}</span></div>
+                        <div><span className="font-medium">Last Active:</span> <span>{stateMessages.length > 0 ? new Date(stateMessages[stateMessages.length - 1].created_at).toLocaleString('en-IN', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true, timeZone: 'UTC' }) : 'N/A'}</span></div>
+                        <div><span className="font-medium">First Conversion:</span> <span>{stateMessages.length > 0 ? new Date(stateMessages[0].created_at).toLocaleString('en-IN', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true, timeZone: 'UTC' }) : 'N/A'}</span></div>
+                        <div><span className="font-medium">Template Messages:</span> <span>{stateMessages.filter(m => m.message_type === 'template').length}</span></div>
+                        <div><span className="font-medium">Session Messages:</span> <span>{stateMessages.filter(m => m.message_type !== 'template').length}</span></div>
+                        <div><span className="font-medium">Unresolved Queries:</span> <span>{conversationData?.unresolved_queries || 0}</span></div>
+                        <div><span className="font-medium">Source:</span> <span>{conversationData?.source || 'ORGANIC'}</span></div>
+                        <div className="col-span-2"><span className="font-medium">Incoming:</span> <span>Allowed</span></div>
+                        <div className="col-span-2"><span className="font-medium">Opted In:</span> <span className="inline-block w-3 h-3 bg-teal-600 rounded-full"></span></div>
+                    </div>
+                </div>
+
+                {/* Payments Section */}
+                <div className="p-4 border-b border-gray-200">
+                    <div className="flex justify-between items-center mb-2">
+                        <div className="text-sm font-semibold text-gray-800">Payments</div>
+                        <button className="text-xs bg-teal-600 text-white px-2 py-1 rounded hover:bg-teal-700">+ Create Payment</button>
+                    </div>
+                    <div className="grid grid-cols-3 gap-1 text-xs text-gray-700 mt-2">
+                        <div className="font-medium">Order Id</div>
+                        <div className="font-medium">Amount</div>
+                        <div className="font-medium">Status</div>
+                    </div>
+                </div>
+
+                {/* Campaigns Section */}
+                <div className="p-4 border-b border-gray-200">
+                    <div className="text-sm font-semibold text-gray-800">Campaigns</div>
+                    <div className="text-xs text-gray-500 mt-2">No active campaigns</div>
+                </div>
+
+                {/* Attributes Section */}
+                <div className="p-4 border-b border-gray-200">
+                    <div className="text-sm font-semibold text-gray-800">Attributes</div>
+                    <div className="text-xs text-gray-500 mt-2">No attributes</div>
+                </div>
+
+                {/* Tags Section */}
+                <div className="p-4 border-b border-gray-200">
+                    <div className="text-sm font-semibold text-gray-800 mb-2">Tags</div>
+                    <select className="w-full text-xs p-1 border border-gray-300 rounded">
+                        <option>Select & add tag</option>
+                    </select>
+                    <div className="text-xs text-teal-600 mt-2 cursor-pointer font-medium">+ Create & Add Tag</div>
+                </div>
+
+                {/* Customer Journey Section */}
+                <div className="p-4 border-b border-gray-200">
+                    <div className="text-sm font-semibold text-gray-800 mb-2">Customer Journey</div>
+                    <ol className="border-l-2 border-teal-400 pl-3 space-y-2 text-xs text-gray-700">
+                        {customerJourney && customerJourney.length > 0 ? (
+                            customerJourney.map((event, idx) => (
+                                <li key={idx} className="relative">
+                                    <span className={`absolute -left-2 top-1 w-2.5 h-2.5 ${idx === 0 ? 'bg-teal-600' : 'border-2 border-teal-400'} rounded-full`}></span>
+                                    <span className="font-medium">{event.action}</span>
+                                    {event.actor && <span className="text-gray-500"> by {event.actor}</span>}
+                                    <br/>
+                                    <span className="text-gray-500 text-xs">{event.timestamp ? new Date(event.timestamp).toLocaleString() : 'N/A'}</span>
+                                </li>
+                            ))
+                        ) : (
+                            <li className="relative">
+                                <span className="absolute -left-2 top-1 w-2.5 h-2.5 bg-teal-600 rounded-full"></span>
+                                <span className="font-medium">User created</span>
+                                <br/>
+                                <span className="text-gray-500 text-xs">Loading journey...</span>
+                            </li>
+                        )}
+                    </ol>
+                </div>
+
+                {/* Block Button */}
+                <div className="p-4">
+                    <button className="w-full text-red-600 font-semibold py-2 border border-red-300 rounded hover:bg-red-50">⛔ Block Incoming Messages</button>
+                </div>
+            </div>
         </div>
     )
 }

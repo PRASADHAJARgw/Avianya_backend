@@ -200,7 +200,13 @@ export function Header({ user, onManagerChange, activeManager }: HeaderProps) {
   };
   
   const handleAccountSelect = (account: any) => {
-    if (manager === 'whatsapp') setSelectedWhatsApp(account);
+    if (manager === 'whatsapp') {
+      setSelectedWhatsApp(account);
+      if (account && account.waba_id) {
+        localStorage.setItem('selected_waba_id', account.waba_id);
+        console.log('💾 Saved selected_waba_id to localStorage:', account.waba_id);
+      }
+    }
     else if (manager === 'instagram') setSelectedInstagram(account);
     else setSelectedAds(account);
   };

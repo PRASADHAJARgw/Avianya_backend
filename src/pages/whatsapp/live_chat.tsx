@@ -301,6 +301,14 @@ const Index = () => {
     }
   }, [activeChat, chats, normalizedRouteWaId, fetchMessages]);
 
+  // Fetch messages when activeChat changes
+  useEffect(() => {
+    if (activeChat) {
+      console.log('🔵 Active chat changed, fetching messages for:', activeChat);
+      fetchMessages(activeChat);
+    }
+  }, [activeChat, fetchMessages]);
+
   // Initial data fetch
   useEffect(() => {
     console.log('🟢 useEffect triggered - fetching initial conversations');

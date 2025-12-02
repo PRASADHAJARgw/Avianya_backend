@@ -85,7 +85,7 @@ export default function SendMessageUI({ message, fileType, file, setMessage, set
 
     return (
         <>
-            {(typeof fileType !== 'undefined') && <div className="bg-slate-200 p-4">
+            {(typeof fileType !== 'undefined') && <div className="bg-slate-200 p-4 mr-10">
                 <div className="inline-block relative">
                     {fileType === 'image' && mediaSrcUrl && <img className="h-48 w-48 inline-block object-cover rounded-md border border-black" src={mediaSrcUrl} />}
                     {fileType === 'video' && mediaSrcUrl && <video className="h-48 w-48 inline-block object-cover rounded-md border border-black" controls src={mediaSrcUrl} />}
@@ -93,7 +93,7 @@ export default function SendMessageUI({ message, fileType, file, setMessage, set
                     <button disabled={messageSendInProgress} className="absolute top-0 right-0 m-2" onClick={removeMedia}><XCircle className="h-8 w-8 bg-slate-300 rounded-full p-1" /></button>
                 </div>
             </div>}
-            <form className="bg-rich-text-panel-background px-4 py-2 flex flex-row gap-4" onSubmit={async (event) => {
+            <form className="bg-rich-text-panel-background px-4 py-2 flex flex-row gap-4 w-30" onSubmit={async (event) => {
                 event.preventDefault()
                 const trimmedMessage = message.trim()
                 if (trimmedMessage.length > 0 || file) {
