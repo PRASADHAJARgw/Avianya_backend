@@ -8,6 +8,7 @@ import NotFound from "./pages/whatsapp/NotFound"; // Ensure NotFound is imported
 import Templates from "./components/whatsapp/TemplateCreator";
 import TemplatesList from './pages/whatsapp/TemplatesList';
 import TemplatesEditor from './pages/whatsapp/TemplatesEditor';
+import Campaigns from './pages/whatsapp/Campaigns';
 // Live Chat with Auth
 import LiveChatLogin from './pages/whatsapp/LiveChatLogin';
 import ForgotPassword from './pages/whatsapp/ForgotPassword';
@@ -40,7 +41,6 @@ import InstagramNotFound from './pages/instagram/NotFound';
 // const Dashboard = () => <div><h1>Dashboard Contents</h1></div>;
 // const Templates = () => <div><h1>Templates Content</h1></div>;
 // const CreateNew = () => <div><h1>Create New Bot Content</h1></div>; // This is replaced by Index
-const Campaigns = () => <div><h1>Campaigns Content</h1></div>;
 
 function RootRoutes() {
   const { user } = useAuth();

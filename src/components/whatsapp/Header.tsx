@@ -13,6 +13,7 @@ import { useNavigate } from "react-router-dom";
 import { useState, useEffect } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/lib/supabase/client";
+import { useToast } from "@/hooks/use-toast";
 
 interface HeaderProps {
   user?: {
@@ -32,6 +33,7 @@ export function Header({ user, onManagerChange, activeManager }: HeaderProps) {
   const navigate = useNavigate();
   const manager = activeManager || 'whatsapp';
   const { user: authUser } = useAuth();
+  const { toast } = useToast();
   
   // WABA Connection State
   const [wabaConnected, setWabaConnected] = useState(false);
@@ -233,6 +235,23 @@ export function Header({ user, onManagerChange, activeManager }: HeaderProps) {
     setWalletBalance(prev => prev + amount);
   };
   
+  const handleConnectWABA = () => {
+    // Check if user is authenticated
+    if (!authUser || !authUser.id) {
+      toast({
+        title: 'Authentication Required',
+        description: 'Please log in to connect your WhatsApp Business Account',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    // Redirect to Facebook OAuth flow
+    const backendUrl = import.meta.env.VITE_BACKEND_URL || 'http://localhost:8080';
+    const userId = authUser.id;
+    window.location.href = `${backendUrl}/auth/facebook?user_id=${userId}`;
+  };
+  
   // Debug log for current state
   console.log('🎨 Rendering Header with state:', {
     wabaConnected,
@@ -256,60 +275,47 @@ export function Header({ user, onManagerChange, activeManager }: HeaderProps) {
         <span className="font-semibold text-3xl">Avianya Tech</span>
       </div>
       <div className="flex items-center space-x-4">
-        {/* Account Selector Dropdown */}
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button 
-              variant="outline" 
-              className="min-w-[220px] justify-between"
-              style={{
-                borderRadius: '8px',
-                borderColor: manager === 'whatsapp' 
-                  ? (wabaConnected ? '#25D366' : '#ef4444')
-                  : manager === 'instagram' ? '#de628a' : '#4A90E2',
-                borderWidth: '3px',
-                height: '60px',
-              }}
-              disabled={manager === 'whatsapp' && !wabaConnected}
-            >
-              <div className="flex flex-col items-start">
-                <span className="text-xs text-muted-foreground flex items-center gap-1">
-                  {manager === 'whatsapp' ? (
-                    <>
-                      WhatsApp Account
-                      {!wabaConnected && <AlertCircle className="w-3 h-3 text-red-500" />}
-                    </>
-                  ) : 
-                   manager === 'instagram' ? 'Instagram Account' : 'Ad Account'}
-                </span>
-                <span className="text-sm font-medium">
-                  {manager === 'whatsapp' ? (
-                    loadingWaba ? 'Loading...' :
-                    !wabaConnected ? 'Not Connected' :
-                    !selectedWhatsApp ? 'Select Account' :
-                    selectedWhatsApp.name
-                  ) : (
-                    getSelectedAccount().name
-                  )}
-                </span>
-              </div>
-              {((manager === 'whatsapp' && wabaConnected) || manager !== 'whatsapp') && (
+        {/* Account Selector Dropdown - Only show if not WhatsApp or if WhatsApp is connected */}
+        {(manager !== 'whatsapp' || wabaConnected) && (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button 
+                variant="outline" 
+                className="min-w-[220px] justify-between"
+                style={{
+                  borderRadius: '8px',
+                  borderColor: manager === 'whatsapp' 
+                    ? '#25D366'
+                    : manager === 'instagram' ? '#de628a' : '#4A90E2',
+                  borderWidth: '3px',
+                  height: '60px',
+                }}
+              >
+                <div className="flex flex-col items-start">
+                  <span className="text-xs text-muted-foreground flex items-center gap-1">
+                    {manager === 'whatsapp' ? 'WhatsApp Account' : 
+                     manager === 'instagram' ? 'Instagram Account' : 'Ad Account'}
+                  </span>
+                  <span className="text-sm font-medium">
+                    {manager === 'whatsapp' ? (
+                      loadingWaba ? 'Loading...' :
+                      !selectedWhatsApp ? 'Select Account' :
+                      selectedWhatsApp.name
+                    ) : (
+                      getSelectedAccount().name
+                    )}
+                  </span>
+                </div>
                 <ChevronDown className="ml-2 h-6 w-4" />
-              )}
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-[250px]">
-            <DropdownMenuLabel>
-              {manager === 'whatsapp' ? (
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-[250px]">
+              <DropdownMenuLabel>
                 <div className="flex items-center justify-between">
-                  {wabaConnected ? (
-                    <span>Select WhatsApp Account</span>
-                  ) : (
-                    <div className="flex items-center gap-2 text-red-600">
-                      <AlertCircle className="w-4 h-4" />
-                      <span>No WABA Connected</span>
-                    </div>
-                  )}
+                  <span>
+                    {manager === 'whatsapp' ? 'Select WhatsApp Account' : 
+                     manager === 'instagram' ? 'Select Instagram Account' : 'Select Ad Account'}
+                  </span>
                   {manager === 'whatsapp' && (
                     <button
                       onClick={(e) => {
@@ -323,19 +329,9 @@ export function Header({ user, onManagerChange, activeManager }: HeaderProps) {
                     </button>
                   )}
                 </div>
-              ) : 
-              manager === 'instagram' ? 'Select Instagram Account' : 'Select Ad Account'}
-            </DropdownMenuLabel>
-            <DropdownMenuSeparator />
-            {manager === 'whatsapp' && !wabaConnected ? (
-              <DropdownMenuItem 
-                onClick={() => navigate('/wa/dashboard')}
-                className="cursor-pointer text-blue-600 hover:text-blue-700"
-              >
-                <span className="font-medium">→ Connect WhatsApp Business</span>
-              </DropdownMenuItem>
-            ) : (
-              getCurrentAccounts().map((account) => (
+              </DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              {getCurrentAccounts().map((account) => (
                 <DropdownMenuItem
                   key={account.id}
                   onClick={() => handleAccountSelect(account)}
@@ -349,10 +345,63 @@ export function Header({ user, onManagerChange, activeManager }: HeaderProps) {
                     <span className="text-xs text-green-600 font-semibold mt-1">● Active</span>
                   )}
                 </DropdownMenuItem>
-              ))
-            )}
-          </DropdownMenuContent>
-        </DropdownMenu>
+              ))}
+              {/* {manager === 'whatsapp' && (
+                <>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem 
+                    onClick={() => navigate('/wa/dashboard')}
+                    className="cursor-pointer text-blue-600 hover:text-blue-700"
+                  >
+                    <span className="font-medium">+ Connect New WABA</span>
+                  </DropdownMenuItem>
+                </>
+              )} */}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        )}
+        
+        {/* Connect WhatsApp Account Card - Show when WhatsApp manager is active and not connected */}
+        {manager === 'whatsapp' && !wabaConnected && !loadingWaba && (
+          <div 
+            className="flex items-center gap-4 px-6 py-3 rounded-xl cursor-pointer transition-all hover:shadow-lg hover:scale-105 border-2 border-dashed"
+            style={{
+              background: 'linear-gradient(135deg, #E8F5E9 0%, #C8E6C9 100%)',
+              borderColor: '#25D366',
+              minWidth: '320px',
+              maxHeight: '60px',
+            }}
+            onClick={handleConnectWABA}
+          >
+            <div className="flex items-center justify-center w-11 h-11 rounded-full bg-white shadow-md">
+              <MessageCircle className="w-6 h-6 text-green-600" strokeWidth={2.5} />
+            </div>
+            <div className="flex flex-col flex-1">
+              <span className="text-sm font-bold text-green-800 flex items-center gap-2">
+                <AlertCircle className="w-4 h-4" />
+                WhatsApp Not Connected
+              </span>
+              <span className="text-xs text-green-700">Click to connect your WhatsApp Business Account</span>
+            </div>
+            <div className="text-green-600 font-bold text-lg">→</div>
+          </div>
+        )}
+        
+        {/* Loading state for WhatsApp */}
+        {manager === 'whatsapp' && loadingWaba && (
+          <div 
+            className="flex items-center gap-4 px-6 py-3 rounded-xl border-2"
+            style={{
+              background: '#F5F5F5',
+              borderColor: '#E0E0E0',
+              minWidth: '320px',
+              maxHeight: '60px',
+            }}
+          >
+            <RefreshCw className="w-6 h-6 text-gray-400 animate-spin" />
+            <span className="text-sm text-gray-600">Checking WhatsApp connection...</span>
+          </div>
+        )}
         {/* Manager toggle buttons */}
         <div className="flex items-center gap-3">
           <button
