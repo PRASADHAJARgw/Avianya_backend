@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import './App.css';
 import './styles/Sidebar.css';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { AuthProvider } from '@/contexts/AuthContext';
 import MainLayout from './components/layouts/MainLayout';
 import Index from "./pages/whatsapp/Index"; // Ensure Index is imported
 import NotFound from "./pages/whatsapp/NotFound"; // Ensure NotFound is imported
@@ -111,9 +112,11 @@ function RootRoutes() {
 
 function App() {
   return (
-    <Router>
-      <RootRoutes />
-    </Router>
+    <AuthProvider>
+      <Router>
+        <RootRoutes />
+      </Router>
+    </AuthProvider>
   );
 }
 
