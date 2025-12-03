@@ -1,6 +1,7 @@
 import { Contact } from "@/types/contact";
 import { SupabaseClient } from "@supabase/supabase-js";
 import { DBTables } from "@/lib/enums/Tables";
+import { useAuthStore } from "@/store/authStore";
 import { 
   ContactRepository, 
   ContactFilterArray, 
@@ -49,14 +50,15 @@ export class ContactBrowserRepository implements ContactRepository {
     console.log(`🌐 Fetching from backend API instead of Supabase`);
     
     try {
-      // Get auth token
-      const { data: { session } } = await this.supabase.auth.getSession();
-      const token = session?.access_token;
+      // Get auth token from JWT auth store
+      const { token } = useAuthStore.getState();
 
       if (!token) {
         console.error('❌ No auth token found');
         return null;
       }
+
+      console.log('🔑 Using JWT token for API request');
 
       // Call backend API
       const API_BASE_URL = 'http://localhost:8080';

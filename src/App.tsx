@@ -14,7 +14,7 @@ import LiveChatLogin from './pages/whatsapp/LiveChatLogin';
 import ForgotPassword from './pages/whatsapp/ForgotPassword';
 import LiveChatPanel from './pages/whatsapp/LiveChatPanel';
 import ProtectedRoute from './components/ProtectedRoute';
-import { AuthProvider, useAuth } from './contexts/AuthContext';
+import { useAuthStore } from '@/store/authStore';
 import ContactsPage from './pages/whatsapp/ContactsPage';
 import Signup from './pages/Signup';
 import UsersPage from './pages/whatsapp/UsersPage';
@@ -43,12 +43,11 @@ import InstagramNotFound from './pages/instagram/NotFound';
 // const CreateNew = () => <div><h1>Create New Bot Content</h1></div>; // This is replaced by Index
 
 function RootRoutes() {
-  const { user } = useAuth();
-  const loginRoutes = ["/", "/login", "/signup", "/wa/live-chat/login", "/wa/live-chat/forgot-password"];
-  const currentPath = window.location.pathname;
-  const isLoginRoute = loginRoutes.includes(currentPath);
-  return (
-    isLoginRoute ? (
+  const { user, isAuthenticated } = useAuthStore();
+  
+  // If user is not authenticated, show only login routes
+  if (!isAuthenticated || !user) {
+    return (
       <Routes>
         <Route path="/" element={<LiveChatLogin />} />
         <Route path="/login" element={<LiveChatLogin />} />
@@ -57,7 +56,11 @@ function RootRoutes() {
         <Route path="/wa/live-chat/forgot-password" element={<ForgotPassword />} />
         <Route path="*" element={<LiveChatLogin />} />
       </Routes>
-    ) : (
+    );
+  }
+  
+  // If user is authenticated, show main app routes
+  return (
       <MainLayout>
         <Routes>
           <Route path="/wa/live-chat" element={<Navigate to="/wa/live-chat/chats" replace />} />
@@ -95,20 +98,21 @@ function RootRoutes() {
           <Route path="/ads/*" element={<AdsNotFound />} />
           <Route path="/wa/*" element={<NotFound />} />
           <Route path="/ig/*" element={<InstagramNotFound />} />
+          {/* Special handling: if authenticated user tries to access login routes, redirect to dashboard */}
+          <Route path="/login" element={<Navigate to="/wa/live-chat/chats" replace />} />
+          <Route path="/signup" element={<Navigate to="/wa/live-chat/chats" replace />} />
+          <Route path="/wa/live-chat/login" element={<Navigate to="/wa/live-chat/chats" replace />} />
           {/* Global fallback */}
           <Route path="*" element={<NotFound />} />
         </Routes>
       </MainLayout>
-    )
-  );
+    );
 }
 
 function App() {
   return (
     <Router>
-      <AuthProvider>
-        <RootRoutes />
-      </AuthProvider>
+      <RootRoutes />
     </Router>
   );
 }

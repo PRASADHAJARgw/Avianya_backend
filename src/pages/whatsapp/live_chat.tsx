@@ -145,7 +145,28 @@ const Index = () => {
       
       const transformedChats = conversations.map(transformConversationToChat);
       console.log('🔵 Transformed Chats:', transformedChats);
-      setChats(transformedChats);
+      
+      // ✅ Only update if data actually changed (prevents unnecessary re-renders)
+      setChats((prevChats) => {
+        const hasChanges = 
+          prevChats.length !== transformedChats.length ||
+          transformedChats.some((chat, idx) => {
+            const prev = prevChats[idx];
+            return !prev || 
+              prev.id !== chat.id ||
+              prev.lastMessage !== chat.lastMessage ||
+              prev.unreadCount !== chat.unreadCount ||
+              prev.lastMessageTime?.getTime() !== chat.lastMessageTime?.getTime();
+          });
+        
+        if (hasChanges) {
+          console.log('🔄 Chats data changed, updating state');
+          return transformedChats;
+        } else {
+          console.log('✅ Chats data unchanged, keeping previous state');
+          return prevChats;
+        }
+      });
     } catch (error) {
       console.error('Error fetching conversations:', error);
       toast({
@@ -241,9 +262,9 @@ const Index = () => {
         description: 'Your message has been delivered',
       });
 
-      // Refresh messages and conversations
+      // Refresh messages only - conversation list updates via WebSocket
       await fetchMessages(activeChat);
-      await fetchConversations();
+      // ✅ Removed fetchConversations() - WebSocket BroadcastConversationUpdate handles this
       
     } catch (error) {
       console.error('Error sending message:', error);
@@ -319,13 +340,12 @@ const Index = () => {
   const { isConnected } = useWebSocket({
     onConversationUpdate: (data) => {
       console.log('🔄 WebSocket: Conversation update received', data);
-      // Refresh conversation list when any conversation changes
+      // ✅ Backend broadcasts conversation_update when messages are sent/received
       fetchConversations();
     },
     onNewMessage: (data) => {
-      console.log('� WebSocket: New message received', data);
-      // Refresh conversation list to update last message and unread count
-      fetchConversations();
+      console.log('📨 WebSocket: New message received', data);
+      // ✅ Removed fetchConversations() - conversation_update event already handles this
       
       // If the message is for the active chat, refresh messages
       if (activeChat && data.conversation_id && data.conversation_id.toString() === activeChat) {

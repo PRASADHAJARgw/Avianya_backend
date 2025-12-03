@@ -3,10 +3,9 @@
 import { useCallback, useState, useEffect } from "react";
 import SendMessageUI, { FileType } from "./SendMessageUI";
 import { TemplateRequest } from "@/types/message-template-request";
-import { useSupabase } from "@/contexts/AuthContext";
+import { useAuthStore } from "@/store/authStore";
 
-export default function SendMessageWrapper({ waId }: { waId: string }) {
-    const { supabase } = useSupabase();
+export default function SendMessageWrapper({ waId, onMessageSent }: { waId: string; onMessageSent?: () => void }) {
     const [message, setMessage] = useState<string>('');
     const [fileType, setFileType] = useState<FileType | undefined>();
     const [file, setFile] = useState<File | undefined>();
@@ -19,8 +18,7 @@ export default function SendMessageWrapper({ waId }: { waId: string }) {
         async function fetchConversation() {
             setIsLoadingConversation(true);
             try {
-                const { data: { session } } = await supabase.auth.getSession();
-                const token = session?.access_token;
+                const { token } = useAuthStore.getState();
                 
                 if (!token) {
                     console.error('❌ No auth token found');
@@ -55,15 +53,13 @@ export default function SendMessageWrapper({ waId }: { waId: string }) {
         }
 
         fetchConversation();
-    }, [waId, supabase]);
+    }, [waId]);
     
     const onMessageSend = useCallback(async () => {
         try {
-            const { data: { session } } = await supabase.auth.getSession();
-            const token = session?.access_token;
-            const userId = session?.user?.id;
+            const { token, user } = useAuthStore.getState();
             
-            if (!token || !userId) {
+            if (!token || !user?.id) {
                 console.error('❌ No auth token found');
                 return;
             }
@@ -108,30 +104,14 @@ export default function SendMessageWrapper({ waId }: { waId: string }) {
                     
                     // Generate unique filename
                     const fileExt = file.name.split('.').pop();
-                    const fileName = `${userId}/${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
+                    const fileName = `${user.id}/${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
                     const filePath = `whatsapp-media/${fileName}`;
 
-                    // Upload to Supabase storage
-                    const { data: uploadData, error: uploadError } = await supabase.storage
-                        .from('chat-media')
-                        .upload(filePath, file, {
-                            cacheControl: '3600',
-                            upsert: false
-                        });
-
-                    if (uploadError) {
-                        console.error('❌ Error uploading file:', uploadError);
-                        alert('Failed to upload file. Please try again.');
-                        return;
-                    }
-
-                    // Get public URL
-                    const { data: urlData } = supabase.storage
-                        .from('chat-media')
-                        .getPublicUrl(filePath);
-
-                    mediaUrl = urlData.publicUrl;
-                    console.log('✅ File uploaded successfully:', mediaUrl);
+                    // TODO: Implement file upload to backend API
+                    // For now, we'll skip media messages
+                    console.warn('⚠️ Media upload not yet implemented for JWT auth');
+                    alert('Media messages are not yet supported. Please send text messages only.');
+                    return;
                 } catch (error) {
                     console.error('❌ Exception uploading file:', error);
                     alert('Failed to upload file. Please try again.');
@@ -165,7 +145,7 @@ export default function SendMessageWrapper({ waId }: { waId: string }) {
             console.log('💬 Message:', trimmedMessage || file?.name);
             console.log('🖼️ Media URL:', mediaUrl);
 
-            const response = await fetch(`http://localhost:8080/api/live-chat/send-message?user_id=${userId}`, {
+            const response = await fetch(`http://localhost:8080/api/live-chat/send-message?user_id=${user.id}`, {
                 method: 'POST',
                 headers: {
                     'Authorization': `Bearer ${token}`,
@@ -179,6 +159,11 @@ export default function SendMessageWrapper({ waId }: { waId: string }) {
                 setMessage('');
                 setFileType(undefined);
                 setFile(undefined);
+                
+                // Notify parent to refresh messages
+                if (onMessageSent) {
+                    onMessageSent();
+                }
             } else {
                 const errorText = await response.text();
                 console.error('❌ Failed to send message:', errorText);
@@ -190,14 +175,13 @@ export default function SendMessageWrapper({ waId }: { waId: string }) {
             console.error('❌ Error sending message:', error);
             throw error; // Re-throw to let UI handle it
         }
-    }, [waId, fileType, message, file, supabase, phoneNumberId, conversationId]);
+    }, [waId, fileType, message, file, phoneNumberId, conversationId, onMessageSent]);
 
     const onTemplateMessageSend = useCallback(async (req: TemplateRequest) => {
         try {
-            const { data: { session } } = await supabase.auth.getSession();
-            const token = session?.access_token;
+            const { token, user } = useAuthStore.getState();
             
-            if (!token) {
+            if (!token || !user?.id) {
                 console.error('❌ No auth token found');
                 return;
             }
@@ -215,7 +199,7 @@ export default function SendMessageWrapper({ waId }: { waId: string }) {
                 conversation_id: conversationId,
             };
 
-            const response = await fetch(`http://localhost:8080/api/live-chat/send-message?user_id=${session?.user?.id}`, {
+            const response = await fetch(`http://localhost:8080/api/live-chat/send-message?user_id=${user.id}`, {
                 method: 'POST',
                 headers: {
                     'Authorization': `Bearer ${token}`,
@@ -234,7 +218,7 @@ export default function SendMessageWrapper({ waId }: { waId: string }) {
         } catch (error) {
             console.error('❌ Error sending template:', error);
         }
-    }, [waId, supabase, phoneNumberId, conversationId]);
+    }, [waId, phoneNumberId, conversationId]);
 
     return (
         <SendMessageUI 

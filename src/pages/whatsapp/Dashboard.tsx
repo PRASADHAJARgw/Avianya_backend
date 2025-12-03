@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { useAuth } from '@/contexts/AuthContext';
+import { useAuthStore } from '@/store/authStore';
 import { useToast } from '@/hooks/use-toast';
 import { 
   MessageSquare, 
@@ -107,7 +107,7 @@ const INITIAL_NUMBERS: PhoneNumber[] = [
 ];
 
 export default function Dashboard() {
-  const { user } = useAuth();
+  const { user } = useAuthStore();
   const { toast } = useToast();
   
   const [campaigns] = useState<Campaign[]>(INITIAL_CAMPAIGNS);

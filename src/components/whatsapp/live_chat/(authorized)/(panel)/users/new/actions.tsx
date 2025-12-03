@@ -1,138 +1,94 @@
-import { supabase } from '@/lib/supabase/client'
 import { z } from 'zod'
+import { useAuthStore } from '@/store/authStore'
+
+const API_BASE = 'http://localhost:8080/api/v2'
 
 const userSchema = z.object({
     id: z.string().optional(),
     firstName: z.string().min(2),
     lastName: z.string().min(2),
     email: z.string().email(),
-    role: z.enum(["agent", "admin"]),
+    role: z.enum(["user", "manager", "admin"]),
+    password: z.string().optional(),
 })
 
 export async function createUser(data: z.infer<typeof userSchema>) {
     console.log('🚀 createUser called with:', data);
-    
     const validatedData = userSchema.parse(data)
     console.log('✅ Data validated:', validatedData);
 
     try {
-        // Get current session and check if user is admin
-        const { data: session, error: sessionError } = await supabase.auth.getSession()
-        if (sessionError) {
-            console.error('❌ Session error:', sessionError);
-            throw new Error('Authentication failed')
-        }
-
-        if (!session.session) {
-            console.error('❌ No session found');
+        // Get token and user role from authStore
+        const { token, user } = useAuthStore.getState();
+        console.log('🔍 Auth state check:', { hasToken: !!token, hasUser: !!user, userRole: user?.role });
+        
+        if (!token) {
+            console.error('❌ No token found in authStore');
             throw new Error('Not authenticated')
         }
 
-        console.log('🔐 Current user session:', session.session.user.email);
-
-        // Check if current user is admin (you may need to adjust this based on your user role system)
-        const { data: currentUserProfile, error: profileError } = await supabase
-            .from('profiles')
-            .select('*, user_roles(*)')
-            .eq('id', session.session.user.id)
-            .single();
-
-        if (profileError) {
-            console.error('❌ Profile fetch error:', profileError);
-            throw new Error('Failed to fetch user profile')
+        if (!user || user.role !== 'admin') {
+            console.error('❌ Access denied:', { hasUser: !!user, userRole: user?.role });
+            throw new Error('You are not authorized to create users. Admin access required.')
         }
 
-        const currentUserRole = currentUserProfile?.user_roles?.[0]?.role;
-        console.log('👤 Current user role:', currentUserRole);
+        // Construct request payload for backend
+        const payload: {
+            name: string;
+            email: string;
+            role: string;
+            password?: string;
+        } = {
+            name: `${validatedData.firstName} ${validatedData.lastName}`,
+            email: validatedData.email,
+            role: validatedData.role,
+        }
 
-        if (currentUserRole !== 'admin') {
-            throw new Error('You are not authorized to create users. Admin access required.')
+        // For create, backend requires password
+        if (!validatedData.id) {
+            payload.password = validatedData.password || crypto.randomUUID().slice(0, 12)
         }
 
         if (validatedData.id) {
             // Update existing user
-            console.log('📝 Updating existing user...');
-            
-            // Update profile
-            const { data: updateProfileData, error: updateProfileError } = await supabase
-                .from('profiles')
-                .update({
-                    first_name: validatedData.firstName,
-                    last_name: validatedData.lastName,
-                    email: validatedData.email,
-                    last_updated: new Date().toISOString()
-                })
-                .eq('id', validatedData.id)
-                .select()
-                .single();
+            const response = await fetch(`${API_BASE}/users/${validatedData.id}`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify(payload)
+            })
 
-            if (updateProfileError) {
-                console.error('❌ Profile update error:', updateProfileError);
-                throw new Error('Failed to update user profile')
-            }
-
-            // Update or insert user role
-            const { data: roleData, error: roleError } = await supabase
-                .from('user_roles')
-                .upsert({
-                    user_id: validatedData.id,
-                    role: validatedData.role
-                }, {
-                    onConflict: 'user_id'
-                });
-
-            if (roleError) {
-                console.error('❌ Role update error:', roleError);
-                throw new Error('Failed to update user role')
+            if (!response.ok) {
+                const text = await response.text()
+                console.error('❌ Failed to update user', text)
+                throw new Error('Failed to update user')
             }
 
             console.log('✅ User updated successfully');
         } else {
             // Create new user
-            console.log('➕ Creating new user...');
-            
-            // For new users, we'll create a profile entry and send an invitation
-            // Note: In a real app, you'd typically use Supabase auth admin functions
-            // For now, we'll create a profile entry that can be activated when user signs up
-            
-            const newUserId = crypto.randomUUID();
-            
-            const { data: newProfile, error: createProfileError } = await supabase
-                .from('profiles')
-                .insert({
-                    id: newUserId,
-                    first_name: validatedData.firstName,
-                    last_name: validatedData.lastName,
-                    email: validatedData.email,
-                    created_at: new Date().toISOString(),
-                    last_updated: new Date().toISOString()
-                })
-                .select()
-                .single();
+            const response = await fetch(`${API_BASE}/users`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify(payload)
+            })
 
-            if (createProfileError) {
-                console.error('❌ Profile creation error:', createProfileError);
-                throw new Error('Failed to create user profile')
-            }
-
-            // Create user role
-            const { data: roleData, error: roleError } = await supabase
-                .from('user_roles')
-                .insert({
-                    user_id: newUserId,
-                    role: validatedData.role
-                });
-
-            if (roleError) {
-                console.error('❌ Role creation error:', roleError);
-                throw new Error('Failed to assign user role')
+            if (!response.ok) {
+                const text = await response.text()
+                console.error('❌ Failed to create user', text)
+                throw new Error('Failed to create user')
             }
 
             console.log('✅ User created successfully');
         }
 
         return { success: true, message: validatedData.id ? 'User updated successfully' : 'User created successfully' };
-        
+
     } catch (error) {
         console.error('❌ Error in createUser:', error);
         throw error;

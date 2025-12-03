@@ -7,7 +7,7 @@ import TailWrapper from "./TailWrapper"
 import ReceivedTemplateMessageUI from "./ReceivedTemplateMessageUI"
 import ReceivedVideoMessageUI from "./ReceivedVideoMessageUI"
 import ReceivedDocumentMessageUI from "./ReceivedDocumentMessageUI"
-import { useSupabase } from "@/contexts/AuthContext"
+import { useAuthStore } from "@/store/authStore"
 import { useWebSocket, WSMessage } from "@/hooks/useWebSocket"
 
 // ✅ FIX 1: SIMPLIFIED TIME FORMATTING
@@ -136,7 +136,6 @@ function addDateToMessages(messages: BackendMessage[]): UIMessage[] {
 }
 
 export default function MessageListClient({ from }: { from: string }) {
-    const { supabase } = useSupabase()
     const [stateMessages, setMessages] = useState<UIMessage[]>([])
     const [additionalMessagesLoading, setAdditionalMessagesLoading] = useState(false)
     const [noMoreMessages, setNoMoreMessages] = useState(false)
@@ -165,8 +164,7 @@ export default function MessageListClient({ from }: { from: string }) {
     useEffect(() => {
         async function fetchConversationId() {
             try {
-                const { data: { session } } = await supabase.auth.getSession();
-                const token = session?.access_token;
+                const { token } = useAuthStore.getState();
                 if (!token) return;
 
                 const response = await fetch(`http://localhost:8080/api/live-chat/conversation/${from}`, {
@@ -184,15 +182,14 @@ export default function MessageListClient({ from }: { from: string }) {
             }
         }
         fetchConversationId();
-    }, [from, supabase]);
+    }, [from]);
 
     // 2. Fetch Messages Function
     const fetchMessages = useCallback(async (limit: number = 50, offset: number = 0): Promise<BackendMessage[]> => {
         if (!conversationId) return [];
 
         try {
-            const { data: { session } } = await supabase.auth.getSession();
-            const token = session?.access_token;
+            const { token } = useAuthStore.getState();
             if (!token) return [];
 
             const response = await fetch(
@@ -207,7 +204,7 @@ export default function MessageListClient({ from }: { from: string }) {
             console.error('Error fetching messages:', error);
             return [];
         }
-    }, [conversationId, supabase]);
+    }, [conversationId]);
 
     // 3. Initial Load
     useEffect(() => {
@@ -249,6 +246,50 @@ export default function MessageListClient({ from }: { from: string }) {
         };
 
         loadMessages();
+    }, [conversationId, fetchMessages]);
+
+    // 3a. Polling for new messages (fallback until WebSocket is fixed)
+    useEffect(() => {
+        if (!conversationId) return;
+
+        console.log('🔄 Starting message polling every 3 seconds');
+        
+        const pollInterval = setInterval(async () => {
+            try {
+                const latestMessages = await fetchMessages(20, 0); // Fetch latest 20 messages
+                
+                if (latestMessages.length > 0) {
+                    setMessages(prevMessages => {
+                        // Get the IDs of existing messages
+                        const existingIds = new Set(prevMessages.map(m => m.id?.toString() || m.uniqueKey));
+                        
+                        // Find truly new messages (not in existing set)
+                        const newMessages = latestMessages.filter(msg => {
+                            const msgId = msg.id?.toString() || `${msg.wa_message_id}`;
+                            return !existingIds.has(msgId);
+                        });
+                        
+                        if (newMessages.length > 0) {
+                            console.log(`📨 Polling found ${newMessages.length} new message(s)`);
+                            const newUIMessages = addDateToMessages(newMessages);
+                            
+                            // Append new messages and scroll
+                            setTimeout(() => scrollToBottom('smooth'), 100);
+                            return [...prevMessages, ...newUIMessages];
+                        }
+                        
+                        return prevMessages;
+                    });
+                }
+            } catch (error) {
+                console.error('❌ Polling error:', error);
+            }
+        }, 3000); // Poll every 3 seconds
+
+        return () => {
+            console.log('🛑 Stopping message polling');
+            clearInterval(pollInterval);
+        };
     }, [conversationId, fetchMessages]);
 
     // 4. WebSocket Handler

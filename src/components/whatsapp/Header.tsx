@@ -11,7 +11,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "../../components/ui/avatar"
 import { User, Settings, LogOut, Megaphone, MessageCircle, ChevronDown, Wallet, X, CreditCard, AlertCircle, RefreshCw } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useState, useEffect } from "react";
-import { useAuth } from "@/contexts/AuthContext";
+import { useAuthStore } from "@/store/authStore";
 import { supabase } from "@/lib/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 
@@ -32,7 +32,7 @@ export function Header({ user, onManagerChange, activeManager }: HeaderProps) {
   const userEmail = safeUser.email || null;
   const navigate = useNavigate();
   const manager = activeManager || 'whatsapp';
-  const { user: authUser } = useAuth();
+  const { user: authUser } = useAuthStore();
   const { toast } = useToast();
   
   // WABA Connection State
@@ -76,97 +76,84 @@ export function Header({ user, onManagerChange, activeManager }: HeaderProps) {
       setLoadingWaba(true);
       const backendUrl = import.meta.env.VITE_BACKEND_URL || 'http://localhost:8080';
       
-      // Get token from Supabase session (not localStorage)
-      const { data: { session } } = await supabase.auth.getSession();
-      const token = session?.access_token;
+      // Get token from our JWT auth store (not Supabase)
+      const { token } = useAuthStore.getState();
       
       console.log('🔍 Fetching WABA status for user:', authUser.id);
       console.log('🔗 Backend URL:', backendUrl);
       console.log('🔑 Token exists:', !!token);
-      console.log('🔑 Token from:', session ? 'Supabase session' : 'not found');
+      console.log('🔑 Token from:', token ? 'JWT auth store' : 'not found');
+      
+      if (!token) {
+        console.log('❌ No JWT token found');
+        setWabaConnected(false);
+        setWabaAccounts([]);
+        return;
+      }
       
       // Fetch WABA status
-      const statusResponse = await fetch(`${backendUrl}/api/waba/status?user_id=${authUser.id}`, {
+      const statusUrl = `${backendUrl}/api/waba/status?user_id=${authUser.id}`;
+      console.log('📡 Fetching from:', statusUrl);
+      
+      const statusResponse = await fetch(statusUrl, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json',
         },
       });
       
-      console.log('📊 Status response status:', statusResponse.status);
-      
-      if (statusResponse.ok) {
-        const statusData = await statusResponse.json();
-        console.log('✅ WABA status data:', statusData);
-        console.log('🔍 Connected value from API:', statusData.connected);
-        console.log('🔍 Accounts array:', statusData.accounts);
-        console.log('🔍 Accounts length:', statusData.accounts?.length);
-        
-        setWabaConnected(statusData.connected);
-        console.log('✅ Set wabaConnected state to:', statusData.connected);
-        
-        if (statusData.connected && statusData.accounts?.length > 0) {
-          // Fetch phone numbers for each WABA
-          const accountsWithPhones = await Promise.all(
-            statusData.accounts.map(async (account: any) => {
-              try {
-                console.log('📱 Fetching phone numbers for WABA:', account.waba_id);
-                const phoneResponse = await fetch(
-                  `${backendUrl}/api/waba/phone-numbers?waba_id=${account.waba_id}`,
-                  {
-                    headers: {
-                      'Authorization': `Bearer ${token}`,
-                      'Content-Type': 'application/json',
-                    },
-                  }
-                );
-                
-                if (phoneResponse.ok) {
-                  const phoneData = await phoneResponse.json();
-                  console.log('📞 Phone data:', phoneData);
-                  
-                  return {
-                    id: account.waba_id,
-                    name: phoneData.phone_numbers?.[0]?.verified_name || `WABA ${account.waba_id.substring(0, 8)}...`,
-                    phone: phoneData.phone_numbers?.[0]?.display_phone_number || 'No phone',
-                    waba_id: account.waba_id,
-                    business_id: account.owner_business_id,
-                    phone_numbers: phoneData.phone_numbers || [],
-                    is_active: account.is_active,
-                  };
-                }
-              } catch (err) {
-                console.error('❌ Error fetching phone numbers:', err);
-              }
-              
-              return {
-                id: account.waba_id,
-                name: `WABA ${account.waba_id.substring(0, 8)}...`,
-                phone: 'Not configured',
-                waba_id: account.waba_id,
-                business_id: account.owner_business_id,
-                is_active: account.is_active,
-              };
-            })
-          );
-          
-          console.log('📋 Final accounts with phones:', accountsWithPhones);
-          setWabaAccounts(accountsWithPhones);
-          
-          if (accountsWithPhones.length > 0 && !selectedWhatsApp) {
-            setSelectedWhatsApp(accountsWithPhones[0]);
-            console.log('✅ Auto-selected first account:', accountsWithPhones[0]);
-          }
-        } else {
-          console.log('⚠️ No accounts found or not connected');
-          setWabaAccounts([]);
-        }
-      } else {
-        console.error('❌ Failed to fetch WABA status:', statusResponse.status, statusResponse.statusText);
-        const errorText = await statusResponse.text();
-        console.error('Error response:', errorText);
-        setWabaConnected(false);
+      if (!statusResponse.ok) {
+        throw new Error(`HTTP ${statusResponse.status}: ${statusResponse.statusText}`);
       }
+      
+      const statusData = await statusResponse.json();
+      console.log('✅ WABA status response:', statusData);
+      
+      if (statusData.connected && statusData.accounts && statusData.accounts.length > 0) {
+        setWabaConnected(true);
+        
+        // Fetch phone numbers for each account
+        const accountsWithPhones = await Promise.all(
+          statusData.accounts.map(async (account: any) => {
+            const phonesUrl = `${backendUrl}/api/waba/phone-numbers?waba_id=${account.waba_id}`;
+            const phonesResponse = await fetch(phonesUrl, {
+              headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json',
+              },
+            });
+            
+            if (!phonesResponse.ok) {
+              console.log(`⚠️ Failed to fetch phones for WABA ${account.waba_id}`);
+              return { ...account, phones: [] };
+            }
+            
+            const phonesData = await phonesResponse.json();
+            const firstPhone = phonesData.phone_numbers?.[0];
+            return {
+              ...account,
+              phones: phonesData.phone_numbers || [],
+              phone: firstPhone?.display_phone_number || 'No phone',
+              verified_name: firstPhone?.verified_name,
+            };
+          })
+        );
+        
+        setWabaAccounts(accountsWithPhones);
+        
+        // Auto-select first account if none selected
+        if (!selectedWhatsApp && accountsWithPhones.length > 0) {
+          setSelectedWhatsApp(accountsWithPhones[0]);
+          localStorage.setItem('selected_waba_id', accountsWithPhones[0].waba_id);
+        }
+        
+        console.log('✅ WABA accounts loaded:', accountsWithPhones.length);
+      } else {
+        setWabaConnected(false);
+        setWabaAccounts([]);
+        console.log('ℹ️ No WABA accounts connected');
+      }
+      
     } catch (error) {
       console.error('❌ Error fetching WABA accounts:', error);
       setWabaConnected(false);
@@ -293,14 +280,20 @@ export function Header({ user, onManagerChange, activeManager }: HeaderProps) {
               >
                 <div className="flex flex-col items-start">
                   <span className="text-xs text-muted-foreground flex items-center gap-1">
-                    {manager === 'whatsapp' ? 'WhatsApp Account' : 
+                    {manager === 'whatsapp' ? (
+                        loadingWaba ? 'WhatsApp Account' :
+                        !selectedWhatsApp ? 'WhatsApp Account' :
+                        selectedWhatsApp.name || `WABA ${selectedWhatsApp.waba_id}`
+                      ) : 
                      manager === 'instagram' ? 'Instagram Account' : 'Ad Account'}
                   </span>
                   <span className="text-sm font-medium">
                     {manager === 'whatsapp' ? (
                       loadingWaba ? 'Loading...' :
                       !selectedWhatsApp ? 'Select Account' :
-                      selectedWhatsApp.name
+                      selectedWhatsApp.verified_name 
+                        ? `${selectedWhatsApp.verified_name} • ${selectedWhatsApp.phone}` 
+                        : selectedWhatsApp.phone || 'Not configured'
                     ) : (
                       getSelectedAccount().name
                     )}
@@ -333,16 +326,30 @@ export function Header({ user, onManagerChange, activeManager }: HeaderProps) {
               <DropdownMenuSeparator />
               {getCurrentAccounts().map((account) => (
                 <DropdownMenuItem
-                  key={account.id}
+                  key={account.waba_id || account.id}
                   onClick={() => handleAccountSelect(account)}
-                  className="flex flex-col items-start cursor-pointer"
+                  className="flex flex-col items-start cursor-pointer py-3"
                 >
-                  <span className="font-medium">{account.name}</span>
-                  <span className="text-xs text-muted-foreground">
-                    {getAccountDisplayText(account)}
-                  </span>
-                  {manager === 'whatsapp' && account.is_active && (
-                    <span className="text-xs text-green-600 font-semibold mt-1">● Active</span>
+                  {manager === 'whatsapp' ? (
+                    <>
+                      <span className="font-bold text-sm">{account.name || `WABA ${account.waba_id}`}</span>
+                      <span className="text-xs text-gray-600 mt-0.5">
+                        📱 {account.phone || 'No phone'}
+                      </span>
+                      <span className="text-xs text-green-700 font-medium mt-0.5">
+                        ✓ {account.verified_name || 'Unverified'}
+                      </span>
+                      {account.is_active && (
+                        <span className="text-xs text-green-600 font-semibold mt-1">● Active</span>
+                      )}
+                    </>
+                  ) : (
+                    <>
+                      <span className="font-medium">{account.name}</span>
+                      <span className="text-xs text-muted-foreground">
+                        {getAccountDisplayText(account)}
+                      </span>
+                    </>
                   )}
                 </DropdownMenuItem>
               ))}

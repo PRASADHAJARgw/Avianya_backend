@@ -1,11 +1,11 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { useAuth } from '@/contexts/AuthContext';
+import { useAuthStore } from '@/store/authStore';
 import { motion, AnimatePresence } from 'framer-motion';
 import { AuthInput } from '@/components/auth/AuthInput';
 import { AuthButton } from '@/components/auth/AuthButton';
 import { Mascot } from '@/components/auth/Mascot';
-import { Mail, Lock, User, Sparkles, BarChart2, LogOut, Zap } from 'lucide-react';
+import { Mail, Lock, User, Sparkles, BarChart2, Building2, Zap } from 'lucide-react';
 import avianyaLogo from '@/assets/images/avianya.png';
 import { useToast } from '@/hooks/use-toast';
 import { generateCreativeUsername } from '@/lib/utils/username';
@@ -19,6 +19,7 @@ interface FormErrors {
   name?: string;
   email?: string;
   password?: string;
+  organizationName?: string;
 }
 
 export default function LiveChatLogin() {
@@ -34,12 +35,12 @@ export default function LiveChatLogin() {
     name: '',
     email: '',
     password: '',
-    role: 'admin' // Default role
+    organizationName: '',
   });
   
   const [errors, setErrors] = useState<FormErrors>({});
   const navigate = useNavigate();
-  const { signIn, signUp, user } = useAuth();
+  const { login, signup, user, isLoading, error: authError, clearError } = useAuthStore();
   const { toast } = useToast();
 
   // Redirect if already logged in
@@ -84,6 +85,7 @@ export default function LiveChatLogin() {
     setErrors({});
     setAuthStatus('idle');
     setIsPasswordFocused(false);
+    clearError();
   };
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
@@ -112,7 +114,10 @@ export default function LiveChatLogin() {
     
     if (!formData.email) newErrors.email = "Email is required";
     if (!formData.password) newErrors.password = "Password is required";
-    if (mode === AuthMode.SIGNUP && !formData.name) newErrors.name = "Name is required";
+    if (mode === AuthMode.SIGNUP) {
+      if (!formData.name) newErrors.name = "Name is required";
+      if (!formData.organizationName) newErrors.organizationName = "Organization name is required";
+    }
 
     if (Object.keys(newErrors).length > 0) {
       setErrors(newErrors);
@@ -122,65 +127,79 @@ export default function LiveChatLogin() {
 
     // Start Auth Process
     setAuthStatus('submitting');
-    setIsPasswordFocused(false); // Make mascot look at user during loading
+    setIsPasswordFocused(false);
+    clearError();
+    
+    // Reset navigation ref at the start of each submit
+    hasNavigatedRef.current = false;
 
     try {
       if (mode === AuthMode.LOGIN) {
-        const { error } = await signIn(formData.email, formData.password);
+        console.log('🔐 Attempting login...', formData.email);
+        await login(formData.email, formData.password);
         
-        if (error) {
-          setAuthStatus('error');
-          setErrors({ password: error.message || "Login failed. Please check your credentials." });
-          toast({
-            title: 'Login Failed',
-            description: error.message || 'Invalid email or password',
-            variant: 'destructive',
-          });
+        console.log('✅ Login successful!');
+        setAuthStatus('success');
+        toast({
+          title: 'Success! 🎉',
+          description: 'Logged in successfully',
+        });
+        
+        // Navigate after successful login
+        console.log('📍 hasNavigatedRef.current:', hasNavigatedRef.current);
+        if (!hasNavigatedRef.current) {
+          hasNavigatedRef.current = true;
+          console.log('🚀 Navigating to dashboard...');
+          setTimeout(() => {
+            console.log('⏰ Navigation timeout executing...');
+            try {
+              navigate('/wa/dashboard');
+              console.log('✈️ Navigate called successfully');
+            } catch (navError) {
+              console.error('❌ Navigation error:', navError);
+            }
+          }, 500);
         } else {
-          setAuthStatus('success');
-          toast({
-            title: 'Success',
-            description: 'Logged in successfully',
-          });
-          // Navigate directly after successful login
-          if (!hasNavigatedRef.current) {
-            hasNavigatedRef.current = true;
-            navigate('/wa/dashboard');
-          }
+          console.log('⚠️ Navigation blocked by hasNavigatedRef');
         }
       } else {
         // Sign Up Mode
-        const { error } = await signUp(formData.email, formData.password, formData.name, formData.role);
+        console.log('📝 Attempting signup...', formData.email);
+        await signup(
+          formData.email, 
+          formData.password, 
+          formData.name, 
+          formData.organizationName
+        );
         
-        if (error) {
-          setAuthStatus('error');
-          setErrors({ password: error.message || "Sign up failed. Please try again." });
-          toast({
-            title: 'Sign Up Failed',
-            description: error.message || 'Could not create account',
-            variant: 'destructive',
+        console.log('✅ Signup successful!');
+        setAuthStatus('success');
+        toast({
+          title: 'Success! 🎉',
+          description: 'Account created successfully! You can now login.',
+        });
+        
+        // Wait for success animation then switch to login
+        setTimeout(() => {
+          setMode(AuthMode.LOGIN);
+          setAuthStatus('idle');
+          setFormData({ 
+            name: '', 
+            email: formData.email, 
+            password: '', 
+            organizationName: '' 
           });
-        } else {
-          setAuthStatus('success');
-          toast({
-            title: 'Success',
-            description: 'Account created! Please check your email to verify.',
-          });
-          // Wait for success animation then switch to login
-          setTimeout(() => {
-            setMode(AuthMode.LOGIN);
-            setAuthStatus('idle');
-            setFormData({ name: '', email: formData.email, password: '', role: 'admin' });
-          }, 2000);
-        }
+        }, 2000);
       }
-    } catch (err) {
-      console.error('Auth error:', err);
+    } catch (err: any) {
+      console.error('❌ Auth error:', err);
       setAuthStatus('error');
-      setErrors({ password: "An unexpected error occurred. Please try again." });
+      const errorMessage = err?.message || authError || "An unexpected error occurred. Please try again.";
+      console.error('Error message:', errorMessage);
+      setErrors({ password: errorMessage });
       toast({
-        title: 'Error',
-        description: 'An unexpected error occurred',
+        title: mode === AuthMode.LOGIN ? 'Login Failed' : 'Sign Up Failed',
+        description: errorMessage,
         variant: 'destructive',
       });
     }
@@ -310,32 +329,18 @@ export default function LiveChatLogin() {
                   disabled={authStatus === 'success'}
                 />
 
-                {/* Role Selector (Sign Up Only) */}
+                {/* Organization Name (Sign Up Only) */}
                 {mode === AuthMode.SIGNUP && (
-                  <div className="mb-5">
-                    <label className="block text-sm font-bold text-gray-700 mb-2">
-                      Select Role
-                    </label>
-                    <div className="relative">
-                      <select
-                        name="role"
-                        value={formData.role}
-                        onChange={handleInputChange}
-                        disabled={authStatus === 'success'}
-                        className="w-full border-2 border-gray-200 rounded-xl px-4 py-3.5 pr-10 bg-white text-gray-800 font-semibold text-base outline-none transition-all duration-300 hover:border-gray-300 focus:border-indigo-400 focus:shadow-lg focus:shadow-indigo-100 disabled:opacity-50 disabled:cursor-not-allowed appearance-none cursor-pointer"
-                      >
-                        <option value="admin">Admin - Full Access</option>
-                        <option value="manager">Manager - Team Management</option>
-                        <option value="agent">Agent - Customer Support</option>
-                        <option value="viewer">Viewer - Read Only</option>
-                      </select>
-                      <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none">
-                        <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                        </svg>
-                      </div>
-                    </div>
-                  </div>
+                  <AuthInput 
+                    label="Organization Name"
+                    name="organizationName"
+                    type="text"
+                    icon={Building2}
+                    value={formData.organizationName}
+                    onChange={handleInputChange}
+                    error={errors.organizationName}
+                    disabled={authStatus === 'success'}
+                  />
                 )}
 
                 {/* Password Input */}
@@ -369,7 +374,7 @@ export default function LiveChatLogin() {
                 <AuthButton 
                   type="submit" 
                   variant="primary"
-                  isLoading={authStatus === 'submitting'}
+                  isLoading={authStatus === 'submitting' || isLoading}
                   className="w-full mt-auto"
                 >
                   {mode === AuthMode.LOGIN ? 'Sign In' : 'Create Account'}

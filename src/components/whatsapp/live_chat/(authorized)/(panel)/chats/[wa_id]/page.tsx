@@ -5,7 +5,6 @@ import ChatHeader from "./ChatHeader";
 import MessageListClient from "./MessageListClient";
 import SendMessageWrapper from "./SendMessageWrapper";
 import { useCallback, useEffect, useState } from "react";
-import { useSupabase } from "@/contexts/AuthContext";
 import ContactBrowserFactory from "@/lib/repositories/contacts/ContactBrowserFactory";
 import { Contact } from "@/types/contact";
 import { Button } from "@/components/ui/button";
@@ -20,11 +19,18 @@ import { apiClient } from "@/lib/api-client";
 export default function ContactChat({ params }: { params: { wa_id: string } }) {
     const [isChatWindowOpen, setChatWindowOpen] = useState<boolean | undefined>()
     const [lastMessageReceivedAt, setLastMessageReceivedAt] = useState<Date | undefined>()
-    const { supabase } = useSupabase()
-    const [contactRepository] = useState(() => ContactBrowserFactory.getInstance(supabase))
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const [contactRepository] = useState(() => ContactBrowserFactory.getInstance(null as any))
     const [messageTemplateSending, setMessageTemplateSending] = useState<boolean>(false);
     const [contact, setContact] = useState<Contact | undefined>();
+    const [messageRefreshKey, setMessageRefreshKey] = useState(0);
     const setCurrentContact = useCurrentContactDispatch()
+    
+    // Callback to refresh messages after send
+    const handleMessageSent = useCallback(() => {
+        console.log('🔄 Triggering message refresh after send');
+        setMessageRefreshKey(prev => prev + 1);
+    }, []);
 
     useEffect(() => {
         contactRepository.getContactById(params.wa_id).then((contact) => {
@@ -47,22 +53,8 @@ export default function ContactChat({ params }: { params: { wa_id: string } }) {
         }
     }, [lastMessageReceivedAt, setChatWindowOpen])
 
-    useEffect(() => {
-        const channel = supabase
-            .channel('last-message-received-channel')
-            .on<Contact>('postgres_changes', {
-                event: 'UPDATE',
-                schema: 'public',
-                table: 'contacts',
-                filter: `wa_id=eq.${params.wa_id}`
-            }, payload => {
-                if (payload.new.last_message_received_at) {
-                    setLastMessageReceivedAt(new Date(payload.new.last_message_received_at))
-                }
-            })
-            .subscribe()
-        return () => { supabase.removeChannel(channel) }
-    }, [supabase, params.wa_id])
+    // TODO: Implement WebSocket-based real-time updates
+    // For now, messages will refresh automatically after send via handleMessageSent callback
 
     const onTemplateSubmit = useCallback(async (req: TemplateRequest) => {
         setMessageTemplateSending(true)
@@ -91,11 +83,11 @@ export default function ContactChat({ params }: { params: { wa_id: string } }) {
                             return (
                                 <>
                                     <ChatHeader contact={contact} />
-                                    <MessageListClient from={params.wa_id} />
+                                    <MessageListClient key={messageRefreshKey} from={params.wa_id} />
                                     {(() => {
                                         if (typeof isChatWindowOpen !== 'undefined' && typeof contact !== 'undefined') {
                                             if (isChatWindowOpen) {
-                                                return <SendMessageWrapper waId={params.wa_id} />
+                                                return <SendMessageWrapper waId={params.wa_id} onMessageSent={handleMessageSent} />
                                             } else {
                                                 return (
                                                     <div className="p-4 bg-white flex flex-row gap-4 items-center">

@@ -1,14 +1,13 @@
 import { useSearchParams } from 'react-router-dom';
 import UserCreationFormClient from '@/components/whatsapp/live_chat/(authorized)/(panel)/users/new/pageClient';
 import { useEffect, useState } from 'react';
-import { supabase } from '@/lib/supabase/client';
 import { FEUser } from '@/types/user';
-import { useAuth } from '@/contexts/AuthContext';
+import { useAuthStore } from '@/store/authStore';
 import { Loader2 } from 'lucide-react';
 
 const UserCreateEditPage = () => {
   const [searchParams] = useSearchParams();
-  const { user } = useAuth();
+  const { user } = useAuthStore();
   const userId = searchParams.get('userId');
   const [userData, setUserData] = useState<FEUser | undefined>();
   const [loading, setLoading] = useState(false);
@@ -22,42 +21,30 @@ const UserCreateEditPage = () => {
       
       const fetchUser = async () => {
         try {
-          const { data: profile, error: profileError } = await supabase
-            .from('profiles')
-            .select('*')
-            .eq('id', userId)
-            .single();
-
-          if (profileError) {
-            console.error('❌ Profile fetch error:', profileError);
-            setError('Failed to load user data');
-            return;
-          }
-
-          if (profile) {
-            const { data: roleData, error: roleError } = await supabase
-              .from('user_roles')
-              .select('*')
-              .eq('user_id', userId)
-              .single();
-
-            if (roleError && roleError.code !== 'PGRST116') { // PGRST116 = no rows found
-              console.error('❌ Role fetch error:', roleError);
-            }
-
-            const user: FEUser = {
-              id: profile.id,
-              firstName: profile.first_name,
-              lastName: profile.last_name,
-              email: profile.email,
-              role: roleData?.role || 'agent'
+          // For now, if editing self, use data from authStore
+          // TODO: Implement backend API for fetching other users
+          if (userId === user?.id) {
+            console.log('✅ Loading current user data from authStore');
+            const currentUser: FEUser = {
+              id: user.id,
+              firstName: user.name.split(' ')[0] || user.name,
+              lastName: user.name.split(' ').slice(1).join(' ') || '',
+              email: user.email,
+              role: user.role
             };
-
-            console.log('✅ User data loaded:', user);
-            setUserData(user);
+            setUserData(currentUser);
+          } else {
+            console.log('⚠️ Editing other users not yet implemented');
+            setError('Editing other users requires backend API implementation');
+            // TODO: Call backend API to get user data
+            // const response = await fetch(`http://localhost:8080/api/v2/users/${userId}`, {
+            //   headers: { 'Authorization': `Bearer ${authStore.token}` }
+            // });
+            // const userData = await response.json();
+            // setUserData(userData);
           }
         } catch (err) {
-          console.error('❌ Error fetching user:', err);
+          console.error('❌ Error loading user:', err);
           setError('An unexpected error occurred');
         } finally {
           setLoading(false);
@@ -66,7 +53,7 @@ const UserCreateEditPage = () => {
 
       fetchUser();
     }
-  }, [userId]);
+  }, [userId, user]);
 
   if (loading) {
     return (

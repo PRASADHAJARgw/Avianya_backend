@@ -1,7 +1,6 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { useAuth } from '@/contexts/AuthContext';
-import { supabase } from '@/lib/supabase/client';
+import { useAuthStore } from '@/store/authStore';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -23,7 +22,7 @@ interface FEUser {
 const pageSize = 10;
 
 const UsersPage = () => {
-  const { user } = useAuth();
+  const { user } = useAuthStore();
   const navigate = useNavigate();
   const { toast } = useToast();
   const [searchParams] = useSearchParams();
@@ -40,46 +39,39 @@ const UsersPage = () => {
   const searchString = searchParams.get('search')?.trim();
   const search = searchString ? `%${searchString}%` : undefined;
 
+  // TODO: Replace with backend API call to GET /api/v2/users
+  // Currently simplified since backend API endpoint is not yet available
   const fetchUsers = useCallback(async () => {
     try {
       setLoading(true);
-      let query = supabase
-        .from('profiles')
-        .select('*', { count: 'exact' })
-        .limit(pageSize)
-        .order('last_updated', { ascending: false })
-        .range(from, to);
-
-      if (search) {
-        query = query.or(`first_name.ilike.${search},last_name.ilike.${search}`);
+      
+      // For now, just show the current logged-in user until backend API is implemented
+      if (user) {
+        const currentUser: FEUser = {
+          id: user.id,
+          firstName: user.name.split(' ')[0] || user.name,
+          lastName: user.name.split(' ').slice(1).join(' ') || '',
+          email: user.email,
+          role: user.role
+        };
+        setUsers([currentUser]);
+        setCount(1);
+      } else {
+        setUsers([]);
+        setCount(0);
       }
-
-      const { data, count: totalCount, error } = await query;
-      if (error) throw error;
-
-      let fetchedUsers: FEUser[] = [];
-      if (data?.length && data.length > 0) {
-        const { data: roles, error: rolesError } = await supabase
-          .from('user_roles')
-          .select('*')
-          .in('user_id', data.map(u => u.id));
-
-        if (rolesError) throw rolesError;
-
-        fetchedUsers = data.map(u => {
-          const role = roles?.find((r) => r.user_id === u.id);
-          return {
-            id: u.id,
-            firstName: u.first_name,
-            lastName: u.last_name,
-            email: u.email,
-            role: role?.role || 'No role'
-          };
-        });
-      }
-
-      setUsers(fetchedUsers);
-      setCount(totalCount || 0);
+      
+      // TODO: Implement proper API call like:
+      // const response = await fetch('http://localhost:8080/api/v2/users', {
+      //   headers: {
+      //     'Authorization': `Bearer ${token}`,
+      //     'Content-Type': 'application/json'
+      //   }
+      // });
+      // const data = await response.json();
+      // setUsers(data.users);
+      // setCount(data.total);
+      
     } catch (error) {
       console.error('Error fetching users:', error);
       toast({
@@ -90,9 +82,9 @@ const UsersPage = () => {
     } finally {
       setLoading(false);
     }
-  }, [from, to, search, toast]);
+  }, [user, toast]);
 
-  // Fetch current user's role
+  // Get current user's role from authStore (already in JWT token)
   const fetchCurrentUserRole = useCallback(async () => {
     if (!user?.id) {
       console.log('⚠️ No user ID found, skipping role fetch');
@@ -101,116 +93,45 @@ const UsersPage = () => {
     
     try {
       setIsLoadingRole(true);
-      console.log('🔍 Fetching current user role for:', user.email, 'ID:', user.id);
+      console.log('🔍 Getting user role from authStore for:', user.email, 'ID:', user.id);
       
-      // First check if user exists in profiles table
-      const { data: profileData, error: profileError } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', user.id)
-        .single();
-
-      console.log('👤 Profile data:', profileData);
-      if (profileError) {
-        console.error('❌ Profile fetch error:', profileError);
-      }
-
-      // Then check user_roles table
-      const { data: roleData, error: roleError } = await supabase
-        .from('user_roles')
-        .select('*')
-        .eq('user_id', user.id)
-        .single();
-
-      console.log('🎭 Role data from user_roles table:', roleData);
-      if (roleError && roleError.code !== 'PGRST116') { // PGRST116 = no rows found
-        console.error('❌ Role fetch error:', roleError);
-        console.log('📋 Error details:', {
-          code: roleError.code,
-          message: roleError.message,
-          details: roleError.details
-        });
-      }
-
-      const role = roleData?.role || 'agent';
-      console.log('� Final determined role:', role);
+      // User role is already in the authStore user object from JWT token
+      const role = user.role || 'user';
+      console.log('🎭 User role from JWT token:', role);
       console.log('🔒 Admin access:', role === 'admin' ? 'GRANTED' : 'DENIED');
       setCurrentUserRole(role);
     } catch (err) {
-      console.error('❌ Error fetching user role:', err);
+      console.error('❌ Error getting user role:', err);
     } finally {
       setIsLoadingRole(false);
     }
-  }, [user?.id, user?.email]);
+  }, [user?.id, user?.email, user?.role]);
 
-  // Simplified admin role assignment
+  // TODO: Role management should be handled by backend API
+  // Admin users should be created/managed through backend endpoints
   const makeCurrentUserAdmin = useCallback(async () => {
     if (!user?.id) return;
     
     try {
-      console.log('🔧 Making current user admin...');
-      console.log('👤 User ID:', user.id);
-      console.log('� User Email:', user.email);
-
-      // Just assign admin role - don't worry about profiles table for now
-      console.log('👑 Assigning admin role directly...');
-      
-      const { data: roleData, error: roleError } = await supabase
-        .from('user_roles')
-        .upsert({
-          user_id: user.id,
-          role: 'admin'
-        }, {
-          onConflict: 'user_id'
-        })
-        .select();
-
-      console.log('🎭 Role assignment result:', { roleData, roleError });
-
-      if (roleError) {
-        console.error('❌ Failed to assign admin role:', roleError);
-        
-        // If user_roles table doesn't exist, let's try to understand the schema
-        if (roleError.code === 'PGRST106') {
-          toast({
-            title: "Database Setup Needed",
-            description: "The user_roles table doesn't exist. Please set up the database schema first.",
-            variant: "destructive",
-          });
-          return;
-        }
-        
-        toast({
-          title: "Error",
-          description: `Failed to assign admin role: ${roleError.message}`,
-          variant: "destructive",
-        });
-        return;
-      }
-
-      console.log('✅ Admin role assigned successfully!');
+      console.log('⚠️ Role management should be handled by backend API');
       toast({
-        title: "Success",
-        description: "Admin role assigned successfully!",
+        title: "Feature Not Available",
+        description: "Role management is handled by the backend admin panel.",
+        variant: "default",
       });
-
-      // Refresh role immediately
-      setCurrentUserRole('admin');
       
-      // Also fetch to make sure
-      setTimeout(() => {
-        fetchCurrentUserRole();
-      }, 500);
+      // Note: In the new multi-tenant system, roles are assigned when creating users
+      // or can be updated through backend API endpoints by super admins
       
     } catch (error) {
-      console.error('❌ Error making user admin:', error);
+      console.error('❌ Error:', error);
       toast({
         title: "Error",
-        description: "Failed to assign admin role",
+        description: "Failed to update role",
         variant: "destructive",
       });
     }
-  }, [user?.id, user?.email, fetchCurrentUserRole, toast]);
+  }, [user?.id, toast]);
 
   useEffect(() => {
     fetchUsers();

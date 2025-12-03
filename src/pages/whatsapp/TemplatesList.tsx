@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Header } from '../../components/whatsapp/Header';
 import { useNavigate } from 'react-router-dom';
-import { useAuth } from '@/contexts/AuthContext';
+import { useAuthStore } from '@/store/authStore';
 import { FileText, Plus, RefreshCw, Edit, Eye, AlertCircle, CheckCircle, Clock, TrendingUp } from 'lucide-react';
 
 const TemplatesList = ({ isSidebarHovered }) => {
@@ -9,7 +9,7 @@ const TemplatesList = ({ isSidebarHovered }) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user } = useAuthStore();
 
   const fetchTemplates = () => {
     if (!user?.id) {

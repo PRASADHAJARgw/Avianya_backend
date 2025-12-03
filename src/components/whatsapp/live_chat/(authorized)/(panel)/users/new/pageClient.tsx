@@ -25,7 +25,7 @@ const formSchema = z.object({
     email: z.string().email({
         message: "Please enter a valid email address.",
     }),
-    role: z.enum(["agent", "admin"], {
+    role: z.enum(["user", "manager", "admin"], {
         required_error: "Please select a role.",
     }),
 })
@@ -42,7 +42,7 @@ export default function UserCreationFormClient({ userData }: {userData?: FEUser 
             firstName: userData?.firstName || '',
             lastName: userData?.lastName || '',
             email: userData?.email || '',
-            role: (userData?.role as 'admin' | 'agent') || "agent",
+            role: (userData?.role as 'admin' | 'manager' | 'user') || "user",
         },
     })
 
@@ -127,7 +127,8 @@ export default function UserCreationFormClient({ userData }: {userData?: FEUser 
                                             </SelectTrigger>
                                         </FormControl>
                                         <SelectContent>
-                                            <SelectItem value="agent">Agent</SelectItem>
+                                            <SelectItem value="user">User</SelectItem>
+                                            <SelectItem value="manager">Manager</SelectItem>
                                             <SelectItem value="admin">Admin</SelectItem>
                                         </SelectContent>
                                     </Select>

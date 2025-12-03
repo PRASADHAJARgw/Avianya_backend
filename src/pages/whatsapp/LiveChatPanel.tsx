@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { useAuth } from '@/contexts/AuthContext';
+import { useAuthStore } from '@/store/authStore';
 import ChatContactsClient from '@/components/whatsapp/live_chat/(authorized)/(panel)/chats/ChatContactsClient';
 import { ContactContextProvider, useCurrentContact } from '@/components/whatsapp/live_chat/(authorized)/(panel)/chats/CurrentContactContext';
 import ContactChat from '@/components/whatsapp/live_chat/(authorized)/(panel)/chats/[wa_id]/page';
@@ -9,7 +9,7 @@ import WhatsAppNavigation from '@/components/whatsapp/WhatsAppNavigation';
 import { useParams } from 'react-router-dom';
 
 const LiveChatPanel = () => {
-  const { user } = useAuth();
+  const { user } = useAuthStore();
 
   return (
     <ContactContextProvider>

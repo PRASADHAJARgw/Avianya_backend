@@ -1,4 +1,5 @@
 import { useSupabase } from "@/contexts/AuthContext";
+import { useAuthStore } from "@/store/authStore";
 import { DBTables } from "@/lib/enums/Tables";
 import { getTimeSince, isLessThanADay } from "@/lib/time-utils";
 import { Contact, ContactFE } from "@/types/contact";
@@ -78,15 +79,29 @@ export function useContactList(search: string, active: boolean) {
         console.log('🔵 useContactList: Fetching conversations from backend API');
         
         try {
-            const { data: { session } } = await supabase.auth.getSession();
-            const token = session?.access_token;
+            // Get token and user from JWT auth store
+            const { token, user } = useAuthStore.getState();
             
             if (!token) {
                 console.error('🔴 No auth token available');
                 return [];
             }
 
-            const response = await fetch(`${API_BASE_URL}/api/live-chat/conversations?limit=${pageSize}`, {
+            if (!user?.id) {
+                console.error('🔴 No user ID available');
+                return [];
+            }
+
+            console.log('🔑 Using JWT token for API request');
+            console.log('👤 User ID:', user.id);
+
+            const url = new URL(`${API_BASE_URL}/api/live-chat/conversations`);
+            url.searchParams.append('limit', pageSize.toString());
+            url.searchParams.append('user_id', user.id);
+
+            console.log('📡 Fetching from:', url.toString());
+
+            const response = await fetch(url.toString(), {
                 headers: {
                     'Authorization': `Bearer ${token}`,
                 },
@@ -116,7 +131,7 @@ export function useContactList(search: string, active: boolean) {
             console.error('🔴 Error fetching conversations:', error);
             return [];
         }
-    }, [supabase, pageSize])
+    }, [pageSize])
     
     const loadMore = useCallback(async () => {
         if (fetchedUntil.current && !noMore.current && !isLoading) {
@@ -168,20 +183,9 @@ export function useContactList(search: string, active: boolean) {
         })
     }, [getContacts, setContacts, setIsLoading, active]);
     
-    // Poll for new messages every 30 seconds instead of Supabase subscription
-    // This is a fallback in case WebSocket misses updates
-    useEffect(() => {
-        const interval = setInterval(() => {
-            console.log('🔵 useContactList: Polling for new conversations');
-            getContacts(active).then((contacts) => {
-                setContacts(addTimeSince(contacts));
-            }).catch((error) => {
-                console.error('Error polling contacts', error);
-            });
-        }, 30000); // Poll every 30 seconds (reduced from 10)
-        
-        return () => clearInterval(interval);
-    }, [getContacts, active]);
+    // ✅ REMOVED POLLING - Now using WebSocket for real-time updates
+    // Old code polled every 30 seconds, which is unnecessary with WebSocket
+    // WebSocket provides instant updates via conversation_update events
     
     return [contacts, loadMore, isLoading] as const;
 }

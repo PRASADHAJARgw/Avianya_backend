@@ -1,7 +1,7 @@
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { MessageSquare, Contact2, Users, LogOut, Menu, X } from 'lucide-react';
-import { useAuth } from '@/contexts/AuthContext';
+import { useAuthStore } from '@/store/authStore';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import { useState, useMemo } from 'react';
@@ -33,7 +33,7 @@ const navItems = [
 export default function WhatsAppNavigation() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { signOut } = useAuth();
+  const { logout } = useAuthStore();
   const { toast } = useToast();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
@@ -53,7 +53,7 @@ export default function WhatsAppNavigation() {
   }, [location.pathname]);
 
   const handleSignOut = async () => {
-    await signOut();
+    logout();
     toast({
       title: 'Signed Out',
       description: 'You have been logged out successfully',

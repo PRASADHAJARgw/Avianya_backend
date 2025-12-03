@@ -1,7 +1,6 @@
 'use client'
 
-import { useSupabase } from '@/contexts/AuthContext'
-import { useAuth } from '@/contexts/AuthContext'
+import { useAuthStore } from '@/store/authStore'
 import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import UserLetterIcon from '@/components/users/UserLetterIcon'
@@ -12,8 +11,7 @@ import BlankUser from '../BlankUser'
 
 export default function ChatHeader({ contact }: { contact: Contact | undefined }) {
     const agentState = useAgents()
-    const { supabase } = useSupabase()
-    const authContext = useAuth()
+    const { user } = useAuthStore()
     const [roleAssigned, setRoleAssigned] = useState<string | null | undefined>(contact?.assigned_to || undefined)
     const [currentTime, setCurrentTime] = useState<string>('')
 
@@ -45,13 +43,14 @@ export default function ChatHeader({ contact }: { contact: Contact | undefined }
     
     const assignToAgent = useCallback(async (agentId: string | null) => {
         if (contact?.wa_id) {
-            await supabase.from('contacts').update({ assigned_to: agentId }).eq('wa_id', contact.wa_id)
+            // TODO: Implement backend API for agent assignment
+            console.log('Assigning contact to agent:', agentId)
             setRoleAssigned(agentId)
         }
-    }, [supabase, contact])
+    }, [contact])
 
     // Check if user is admin (you can adjust this logic based on your auth setup)
-    const isAdmin = authContext?.user?.email?.includes('admin') || true // Adjust based on your role logic
+    const isAdmin = user?.email?.includes('admin') || true // Adjust based on your role logic
 
     return (
         <div className="bg-panel-header-background">

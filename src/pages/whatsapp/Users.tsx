@@ -1,7 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { useAuth } from '@/contexts/AuthContext';
-import { supabase } from '@/lib/supabase/client';
+import { useAuthStore } from '@/store/authStore';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -32,7 +31,7 @@ const Users = () => {
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const { toast } = useToast();
-  const { user, signOut } = useAuth();
+  const { user, logout } = useAuthStore();
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -43,7 +42,7 @@ const Users = () => {
   ];
 
   const handleSignOut = async () => {
-    await signOut();
+    await logout();
     toast({
       title: 'Signed Out',
       description: 'You have been logged out successfully',
@@ -51,25 +50,139 @@ const Users = () => {
     navigate('/wa/live-chat/login');
   };
 
-  useEffect(() => {
-    fetchUsers();
-  }, []);
+  // Role-based permission helpers
+  const canEditUser = (targetUser: User) => {
+    if (!user) return false;
+    
+    // Admin can edit everyone
+    if (user.role === 'admin') return true;
+    
+    // Manager can edit only users (not other managers or admins)
+    if (user.role === 'manager') {
+      const targetRole = targetUser.role || 'user';
+      return targetRole === 'user';
+    }
+    
+    // User can only edit themselves
+    if (user.role === 'user') {
+      return user.id === targetUser.id;
+    }
+    
+    return false;
+  };
 
-  const fetchUsers = async () => {
+  const canDeleteUser = (targetUser: User) => {
+    if (!user) return false;
+    
+    // Only admin can delete users
+    if (user.role === 'admin') {
+      // Admin cannot delete themselves
+      return user.id !== targetUser.id;
+    }
+    
+    return false;
+  };
+
+  const canChangeRole = (targetUser: User) => {
+    if (!user) return false;
+    
+    // Only admin can change roles
+    if (user.role === 'admin') {
+      // Admin cannot change their own role (prevent lockout)
+      return user.id !== targetUser.id;
+    }
+    
+    return false;
+  };
+
+  const fetchUsers = useCallback(async () => {
     try {
-      // Fetch authenticated users from auth.users (requires admin access)
-      const { data: { users: authUsers }, error } = await supabase.auth.admin.listUsers();
+      setLoading(true);
       
-      if (error) {
-        // Fallback: try to get current user's profile if admin access fails
-        const { data: { user } } = await supabase.auth.getUser();
-        if (user) {
-          setUsers([user as any]);
-        }
-        throw error;
+      // Get token from authStore
+      const { token } = useAuthStore.getState();
+      
+      if (!token) {
+        console.error('❌ No authentication token found');
+        setUsers([]);
+        return;
       }
       
-      setUsers(authUsers as any || []);
+      console.log('🔍 Fetching all users from backend API');
+      console.log('🔐 Current user:', { 
+        id: user?.id, 
+        email: user?.email, 
+        role: user?.role, 
+        organization_id: user?.organization_id 
+      });
+      
+      const response = await fetch('http://localhost:8080/api/v2/users', {
+        headers: { 
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error(`❌ API error: ${response.status} ${response.statusText}`, errorText);
+        
+        if (response.status === 401) {
+          console.error('❌ Unauthorized - invalid token');
+          toast({
+            title: 'Authentication Error',
+            description: 'Your session has expired. Please log in again.',
+            variant: 'destructive',
+          });
+        } else if (response.status === 403) {
+          console.error('❌ Forbidden - insufficient permissions');
+          toast({
+            title: 'Access Denied', 
+            description: 'You don\'t have permission to view all users.',
+            variant: 'destructive',
+          });
+        } else {
+          toast({
+            title: 'Error',
+            description: `Failed to load users: ${response.status} ${response.statusText}`,
+            variant: 'destructive',
+          });
+        }
+        
+        // Fallback: show only current user if API fails
+        if (user) {
+          const currentUserData = {
+            id: user.id,
+            email: user.email,
+            user_metadata: {
+              full_name: user.name
+            }
+          };
+          setUsers([currentUserData]);
+        }
+        return;
+      }
+      
+      const data = await response.json();
+      console.log('✅ Users fetched from API:', data);
+      console.log(`📊 Found ${data.users?.length || 0} users in organization`);
+      
+      // Transform backend user format to frontend format
+      const transformedUsers = (data.users || []).map((apiUser: { id: string, email: string, name: string, role?: string, organization_id?: string }) => ({
+        id: apiUser.id,
+        email: apiUser.email,
+        role: apiUser.role,
+        organization_id: apiUser.organization_id,
+        user_metadata: {
+          full_name: apiUser.name
+        },
+        raw_user_meta_data: {
+          full_name: apiUser.name
+        }
+      }));
+      
+      setUsers(transformedUsers);
+      
     } catch (error) {
       console.error('Error fetching users:', error);
       toast({
@@ -80,7 +193,11 @@ const Users = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [user, toast]);
+
+  useEffect(() => {
+    fetchUsers();
+  }, [fetchUsers]);
 
   const filteredUsers = users.filter(user => {
     const firstName = user.raw_user_meta_data?.first_name || '';
@@ -127,6 +244,8 @@ const Users = () => {
         return 'destructive';
       case 'manager':
         return 'default';
+      case 'user':
+        return 'secondary';
       case 'agent':
         return 'secondary';
       default:
@@ -146,25 +265,43 @@ const Users = () => {
   return (
     <div className="container mx-auto p-6 max-w-7xl">
       <div className="mb-6">
-        <h1 className="text-3xl font-bold mb-2">Users</h1>
+        <h1 className="text-3xl font-bold mb-2">User Management</h1>
         <p className="text-muted-foreground">
-          Manage team members and their permissions
+          {user?.role === 'admin' 
+            ? 'Manage all team members and their permissions within your organization'
+            : user?.role === 'manager'
+            ? 'View team members and manage users with basic privileges'
+            : 'View team members and manage your own profile'
+          }
         </p>
+        {user?.organization_id && (
+          <p className="text-sm text-muted-foreground mt-1">
+            Organization: {user.organization_id}
+          </p>
+        )}
       </div>
 
       <Card>
         <CardHeader>
           <div className="flex items-center justify-between">
             <div>
-              <CardTitle>Team Members</CardTitle>
+              <CardTitle>Organization Team Members</CardTitle>
               <CardDescription>
-                {filteredUsers.length} user{filteredUsers.length !== 1 ? 's' : ''} found
+                {filteredUsers.length} user{filteredUsers.length !== 1 ? 's' : ''} in your organization
+                {user?.role === 'admin' ? ' • Full management access' : 
+                 user?.role === 'manager' ? ' • Limited management access' : 
+                 ' • View access only'}
               </CardDescription>
             </div>
-            <Button className="gap-2">
-              <UserPlus className="h-4 w-4" />
-              Invite User
-            </Button>
+            {user?.role === 'admin' && (
+              <Button 
+                className="gap-2"
+                onClick={() => navigate('/wa/users/new')}
+              >
+                <UserPlus className="h-4 w-4" />
+                Invite User
+              </Button>
+            )}
           </div>
         </CardHeader>
         <CardContent>
@@ -243,19 +380,30 @@ const Users = () => {
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
                               <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                              <DropdownMenuItem className="cursor-pointer">
-                                <Pencil className="h-4 w-4 mr-2" />
-                                Edit User
-                              </DropdownMenuItem>
-                              <DropdownMenuItem className="cursor-pointer">
-                                <Shield className="h-4 w-4 mr-2" />
-                                Change Role
-                              </DropdownMenuItem>
-                              <DropdownMenuSeparator />
-                              <DropdownMenuItem className="cursor-pointer text-destructive">
-                                <Trash2 className="h-4 w-4 mr-2" />
-                                Delete User
-                              </DropdownMenuItem>
+                              {canEditUser(user) && (
+                                <DropdownMenuItem 
+                                  className="cursor-pointer"
+                                  onClick={() => navigate(`/wa/users/edit?userId=${user.id}`)}
+                                >
+                                  <Pencil className="h-4 w-4 mr-2" />
+                                  Edit User
+                                </DropdownMenuItem>
+                              )}
+                              {canChangeRole(user) && (
+                                <DropdownMenuItem className="cursor-pointer">
+                                  <Shield className="h-4 w-4 mr-2" />
+                                  Change Role
+                                </DropdownMenuItem>
+                              )}
+                              {(canEditUser(user) || canChangeRole(user) || canDeleteUser(user)) && canDeleteUser(user) && (
+                                <DropdownMenuSeparator />
+                              )}
+                              {canDeleteUser(user) && (
+                                <DropdownMenuItem className="cursor-pointer text-destructive">
+                                  <Trash2 className="h-4 w-4 mr-2" />
+                                  Delete User
+                                </DropdownMenuItem>
+                              )}
                             </DropdownMenuContent>
                           </DropdownMenu>
                         </TableCell>

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
-import { supabase } from '@/lib/supabase/client';
+import { useAuthStore } from '@/store/authStore';
 
 export interface WSMessage {
   type: 'new_message' | 'status_update' | 'conversation_update';
@@ -52,17 +52,17 @@ export const useWebSocket = (options: UseWebSocketOptions = {}) => {
     try {
       setIsConnecting(true);
 
-      // Get current user session
-      const { data: { session } } = await supabase.auth.getSession();
+      // Get current user from auth store
+      const { token, user } = useAuthStore.getState();
       
-      if (!session?.access_token) {
+      if (!token || !user?.id) {
         console.error('❌ No access token available for WebSocket connection');
         setIsConnecting(false);
         return;
       }
 
-      // Extract user_id from session
-      const userId = session.user.id;
+      // Extract user_id from auth store
+      const userId = user.id;
       
       // Connect to WebSocket with user_id as query parameter
       const wsUrl = `ws://localhost:8080/ws?user_id=${userId}`;

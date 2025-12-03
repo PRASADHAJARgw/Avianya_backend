@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useAuth } from '@/contexts/AuthContext';
+import { useAuthStore } from '@/store/authStore';
 import { 
   Send, 
   Plus, 
@@ -16,6 +16,7 @@ import {
   Trash2,
   Eye,
   Download,
+  
   Users,
   MessageSquare,
   TrendingUp
@@ -53,7 +54,7 @@ const Campaigns = () => {
   const [error, setError] = useState<string | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user } = useAuthStore();
 
   // Create Campaign Form State
   const [campaignName, setCampaignName] = useState('');
