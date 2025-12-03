@@ -1,0 +1,5 @@
+{
+  "name": "WhatsApp Template Builder",
+  "description": "A modern, user-friendly React application for creating WhatsApp Business API message templates with real-time preview and JSON generation.",
+  "requestFramePermissions": []
+}
