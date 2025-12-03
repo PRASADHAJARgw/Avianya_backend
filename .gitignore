@@ -17,7 +17,7 @@ dist-ssr
 .env.local
 .env.production
 go_server/mongo_golang/
-templates/
+templates
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
