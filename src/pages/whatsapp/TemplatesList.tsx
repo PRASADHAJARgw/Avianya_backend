@@ -58,19 +58,35 @@ const TemplatesList = ({ isSidebarHovered }) => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.id]);
 
-  // Get status badge styling
+  // Get status badge styling with modern colors
   const getStatusBadge = (status: string) => {
-    const statusMap = {
-      'APPROVED': { bg: 'bg-emerald-50', text: 'text-emerald-700', border: 'border-emerald-200', icon: <CheckCircle className="w-3 h-3" /> },
-      'PENDING': { bg: 'bg-amber-50', text: 'text-amber-700', border: 'border-amber-200', icon: <Clock className="w-3 h-3" /> },
+    const statusMap: Record<string, { bg: string; text: string; border: string; icon: JSX.Element }> = {
+      // Approved statuses - Green
+      'approved': { bg: 'bg-green-50', text: 'text-green-700', border: 'border-green-200', icon: <CheckCircle className="w-3 h-3" /> },
+      'APPROVED': { bg: 'bg-green-50', text: 'text-green-700', border: 'border-green-200', icon: <CheckCircle className="w-3 h-3" /> },
+      'Active': { bg: 'bg-green-50', text: 'text-green-700', border: 'border-green-200', icon: <CheckCircle className="w-3 h-3" /> },
+      
+      // Pending/In-progress statuses - Orange
+      'pending_meta_submission': { bg: 'bg-orange-50', text: 'text-orange-700', border: 'border-orange-200', icon: <Clock className="w-3 h-3" /> },
+      'meta_submitted': { bg: 'bg-orange-50', text: 'text-orange-700', border: 'border-orange-200', icon: <Clock className="w-3 h-3" /> },
+      'PENDING': { bg: 'bg-orange-50', text: 'text-orange-700', border: 'border-orange-200', icon: <Clock className="w-3 h-3" /> },
+      
+      // Rejected/Failed statuses - Red
+      'rejected': { bg: 'bg-red-50', text: 'text-red-700', border: 'border-red-200', icon: <AlertCircle className="w-3 h-3" /> },
       'REJECTED': { bg: 'bg-red-50', text: 'text-red-700', border: 'border-red-200', icon: <AlertCircle className="w-3 h-3" /> },
-      'Active': { bg: 'bg-emerald-50', text: 'text-emerald-700', border: 'border-emerald-200', icon: <CheckCircle className="w-3 h-3" /> },
+      'meta_submission_failed': { bg: 'bg-red-50', text: 'text-red-700', border: 'border-red-200', icon: <AlertCircle className="w-3 h-3" /> },
+      'failed': { bg: 'bg-red-50', text: 'text-red-700', border: 'border-red-200', icon: <AlertCircle className="w-3 h-3" /> },
     };
+    
     const style = statusMap[status] || { bg: 'bg-slate-50', text: 'text-slate-700', border: 'border-slate-200', icon: <AlertCircle className="w-3 h-3" /> };
+    
+    // Format status text for display (replace underscores with spaces, capitalize)
+    const displayStatus = status.replace(/_/g, ' ').replace(/\b\w/g, (char) => char.toUpperCase());
+    
     return (
       <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold border ${style.bg} ${style.text} ${style.border}`}>
         {style.icon}
-        {status}
+        {displayStatus}
       </span>
     );
   };
@@ -130,7 +146,7 @@ const TemplatesList = ({ isSidebarHovered }) => {
       {/* Main Content */}
       <main className="px-4 md:px-8 pb-8 w-full">
         {/* Stats Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
           <div className="group relative overflow-hidden bg-white border border-slate-200 rounded-xl p-5 transition-all duration-300 hover:shadow-md">
             <div className="flex justify-between items-start relative z-10">
               <div>
@@ -148,10 +164,12 @@ const TemplatesList = ({ isSidebarHovered }) => {
               <div>
                 <p className="text-slate-500 text-xs font-bold uppercase tracking-wide mb-1">Approved</p>
                 <h3 className="text-2xl font-bold text-slate-800 tracking-tight">
-                  {Array.isArray(templates) ? templates.filter(t => t.status === 'APPROVED' || t.status === 'Active').length : 0}
+                  {Array.isArray(templates) ? templates.filter(t => 
+                    t.status === 'approved' || t.status === 'APPROVED' || t.status === 'Active'
+                  ).length : 0}
                 </h3>
               </div>
-              <div className="p-2.5 rounded-lg bg-white border border-slate-100 shadow-sm text-emerald-600">
+              <div className="p-2.5 rounded-lg bg-white border border-slate-100 shadow-sm text-green-600">
                 <CheckCircle className="w-5 h-5" />
               </div>
             </div>
@@ -162,11 +180,30 @@ const TemplatesList = ({ isSidebarHovered }) => {
               <div>
                 <p className="text-slate-500 text-xs font-bold uppercase tracking-wide mb-1">Pending</p>
                 <h3 className="text-2xl font-bold text-slate-800 tracking-tight">
-                  {Array.isArray(templates) ? templates.filter(t => t.status === 'PENDING').length : 0}
+                  {Array.isArray(templates) ? templates.filter(t => 
+                    t.status === 'PENDING' || t.status === 'pending_meta_submission' || t.status === 'meta_submitted'
+                  ).length : 0}
                 </h3>
               </div>
-              <div className="p-2.5 rounded-lg bg-white border border-slate-100 shadow-sm text-amber-600">
+              <div className="p-2.5 rounded-lg bg-white border border-slate-100 shadow-sm text-orange-600">
                 <Clock className="w-5 h-5" />
+              </div>
+            </div>
+          </div>
+
+          <div className="group relative overflow-hidden bg-white border border-slate-200 rounded-xl p-5 transition-all duration-300 hover:shadow-md">
+            <div className="flex justify-between items-start relative z-10">
+              <div>
+                <p className="text-slate-500 text-xs font-bold uppercase tracking-wide mb-1">Rejected</p>
+                <h3 className="text-2xl font-bold text-slate-800 tracking-tight">
+                  {Array.isArray(templates) ? templates.filter(t => 
+                    t.status === 'rejected' || t.status === 'REJECTED' || 
+                    t.status === 'meta_submission_failed' || t.status === 'failed'
+                  ).length : 0}
+                </h3>
+              </div>
+              <div className="p-2.5 rounded-lg bg-white border border-slate-100 shadow-sm text-red-600">
+                <AlertCircle className="w-5 h-5" />
               </div>
             </div>
           </div>
