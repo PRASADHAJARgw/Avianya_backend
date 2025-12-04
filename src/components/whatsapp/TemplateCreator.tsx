@@ -7,7 +7,7 @@ import {
     FileText, Image as ImageIcon, Video, File, MapPin, 
     Type as TypeIcon, Layout, AlertCircle, CheckCircle, Code, Lock, Layers, Copy, X, ShoppingBag, Phone, Clock,
     Sparkles, Wand2, RefreshCw, Bot, Upload, ArrowRight, Link as LinkIcon, Download, Grid,
-    Bold, Italic, Strikethrough, CornerDownLeft
+    Bold, Italic, Strikethrough, CornerDownLeft, Save, Cloud
 } from 'lucide-react';
 import clsx from 'clsx'; 
 import { GoogleGenAI, Type } from "@google/genai";
@@ -37,7 +37,7 @@ let cardIdCounter = 0;
 
 // UI Component: Form Section Wrapper
 const FormSection = ({ title, children, icon: Icon, description, rightElement }: { title: string, children?: React.ReactNode, icon?: any, description?: string, rightElement?: React.ReactNode }) => (
-    <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden transition-all duration-200 hover:shadow-md">
+    <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden transition-all duration-200 hover:shadow-md">
         <div className="p-5 border-b border-slate-100 bg-slate-50/50 flex items-start justify-between gap-3">
             <div className="flex items-start gap-3">
                 {Icon && <div className="p-2 bg-emerald-100 text-emerald-600 rounded-lg"><Icon size={20} /></div>}
@@ -166,6 +166,7 @@ const TemplateCreator: React.FC<TemplateCreatorProps> = ({ initialTemplateJson }
     const [language, setLanguage] = useState("en_US");
     const [category, setCategory] = useState("");
     const [loading, setLoading] = useState(false);
+    const [loadingMeta, setLoadingMeta] = useState(false);
 
     // AI State
     const [isAiMode, setIsAiMode] = useState(false);
@@ -891,27 +892,52 @@ const TemplateCreator: React.FC<TemplateCreatorProps> = ({ initialTemplateJson }
         return collapsed.length <= 2;
     };
 
-    const handleSubmit = async (e: React.FormEvent) => {
-        e.preventDefault();
+    const validateForm = () => {
         for (const btn of buttons) {
             if (btn.type === 'URL' && btn.urlType === 'dynamic' && !btn.url?.includes('{{1}}')) {
                 alert(`Error for button "${btn.text || 'Untitled'}": A dynamic URL must contain the placeholder {{1}}.`);
-                return;
+                return false;
             }
         }
+        return true;
+    };
+
+    const handleSaveTemplate = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!validateForm()) return;
+        
         setLoading(true);
         try {
+            // Save to local database only
             await new Promise(resolve => setTimeout(resolve, 1500));
-            alert('Template created!');
+            alert('Template saved to database successfully!');
         } finally {
             setLoading(false);
         }
     };
 
+    const handleSaveAndCreateMeta = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!validateForm()) return;
+        
+        setLoadingMeta(true);
+        try {
+            // Save to DB and create template in Meta
+            await new Promise(resolve => setTimeout(resolve, 2500));
+            alert('Template saved to database and created in Meta successfully!');
+        } finally {
+            setLoadingMeta(false);
+        }
+    };
+
+    // Keep original handleSubmit for form onSubmit (will use Save as Draft)
+
+    const handleSubmit = handleSaveTemplate;
+
     const anyAppInvalid = supportedApps.some(app => !(validatePackageName(app.package_name) && validateSignatureHash(app.signature_hash)));
     const groupingValid = templateType === 'Default' ? validateButtonGrouping(buttons.map(b => b.type)) : true;
     const carouselInvalid = templateType === 'Carousel' && carouselCards.some(c => !c.bodyText || c.bodyText.trim().length === 0);
-    const isSubmitDisabled = loading || !category || (category === 'AUTHENTICATION' && authType === 'ZERO_TAP' && !zeroTapConsent) || ((authType === 'ONE_TAP' || authType === 'ZERO_TAP') && anyAppInvalid) || !groupingValid || carouselInvalid;
+    const isSubmitDisabled = (loading || loadingMeta) || !category || !templateName || !templateName.trim() || (category === 'AUTHENTICATION' && authType === 'ZERO_TAP' && !zeroTapConsent) || ((authType === 'ONE_TAP' || authType === 'ZERO_TAP') && anyAppInvalid) || !groupingValid || carouselInvalid;
     const variablesInBody = [...new Set(bodyText.match(/{{\d+}}/g) || [])];
     const variablesInHeader = [...new Set(headerText.match(/{{\d+}}/g) || [])];
 
@@ -958,34 +984,148 @@ const TemplateCreator: React.FC<TemplateCreatorProps> = ({ initialTemplateJson }
     }
 
     return (
-        <div className="flex flex-col lg:flex-row  pb-10 ml-6 mt-6">
-            {/* Left Column: Form Editor */}
-            <div className="lg:w-8/12 space-y-6">
+        <div className="min-h-screen w-full bg-slate-50 font-sans">
+            {/* Glassmorphism Header */}
+            <header
+                className="
+                    px-4 md:px-8 pt-4 md:pt-6 pb-4
+                    sticky top-0 z-50
+                    shadow-sm
+                    bg-white/40
+                    backdrop-blur-md
+                    border-b border-slate-200/60
+                    transition-all mb-3
+                "
+                style={{
+                    background: 'rgba(255,255,255,0.40)',
+                    WebkitBackdropFilter: 'blur(20px)',
+                    backdropFilter: 'blur(12px)',
+                }}
+            >
+                <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-md">
+                    <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+                        {/* Left Side: Title */}
+
+                        <div className="flex items-center gap-3 pl-2">
+                            <MessageSquare className="text-emerald-500 w-7 h-7" />
+                            <div>
+                                <h1 className="text-xl font-bold text-slate-800">
+                                    {initialTemplateJson ? 'Edit Template' : 'Create New Template'}
+                                </h1>
+                                <p className="text-slate-500 text-xs mt-0.5">
+                                    {initialTemplateJson ? 'Modify your WhatsApp message template' : 'Build your WhatsApp message template'}
+                                </p>
+                            </div>
+                        </div>
+                        
+                        {/* Right Side: All Buttons in One Line */}
+                        <div className="flex flex-wrap items-center gap-3 lg:gap-4">
+                            <div className="flex items-center  gap-20 flex-shrink-0">
+                            {/* Mode Toggle Button */}
+                            {/* <div className="flex-shrink-0 mr-10 lg:ml-12"> */}
+                                {isAiMode ? (
+                                    <button 
+                                        onClick={() => setIsAiMode(false)}
+                                        className="flex items-center gap-2 px-3 py-2 rounded-lg bg-slate-100 text-slate-700 border border-slate-200 hover:bg-slate-200 transition-all cursor-pointer text-sm"
+                                    >
+                                        <Layout size={16} />
+                                        <span className="font-medium">Manual Builder</span>
+                                    </button>
+                                ) : (
+                                    <button 
+                                        onClick={() => setIsAiMode(true)}
+                                        className="flex items-center gap-2 px-3 py-2 rounded-lg bg-gradient-to-r from-violet-500 to-fuchsia-500 text-white shadow-md hover:from-violet-600 hover:to-fuchsia-600 transition-all cursor-pointer text-sm"
+                                    >
+                                        <Bot size={16} />
+                                        <span className="font-medium">Generate with AI</span>
+                                    </button>
+                                )}
+                            {/* </div> */}
+                            
+                            {/* Responsive spacer - smaller now */}
+                            {/* <div className="hidden lg:block w-20 ml-4 mr-4 xl:w-12"></div> */}
+                           
+                            {/* Save Buttons */}
+                            {/* <div className="flex items-center pl-3 pr-3 gap-10 flex-shrink-0"> */}
+                                <button 
+                                    type="button"
+                                    onClick={handleSaveTemplate}
+                                    disabled={isSubmitDisabled} 
+                                    className={`px-4 py-2 rounded-lg font-medium transition-all flex items-center gap-2 text-sm ${
+                                        isSubmitDisabled 
+                                        ? 'bg-slate-300 cursor-not-allowed shadow-none' 
+                                        : 'bg-blue-600 hover:bg-blue-700 text-white shadow-md shadow-blue-500/30'
+                                    }`}
+                                >
+                                    <Save size={16} />
+                                    {loading ? 'Saving...' : 'Save as Draft'}
+                                </button>
+                                
+                                <button 
+                                    type="button"
+                                    onClick={handleSaveAndCreateMeta}
+                                    disabled={isSubmitDisabled} 
+                                    className={`px-4 py-2 rounded-lg font-medium transition-all flex items-center gap-2 text-sm ${
+                                        isSubmitDisabled 
+                                        ? 'bg-slate-300 cursor-not-allowed shadow-none' 
+                                        : 'bg-emerald-600 hover:bg-emerald-700 text-white shadow shadow-emerald-500/30'
+                                    }`}
+                                >
+                                    <Cloud size={16} />
+                                    {loadingMeta ? 'Creating...' : 'Submit to Meta'}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </header>
+
+            {/* Main Content */}
+            <main className="px-4 md:px-8 pb-8 w-full">
+                <div className="flex flex-col lg:flex-row gap-6">
+                    {/* Left Column: Form Editor */}
+                    <div className="lg:w-8/12 space-y-6">
                 
                 {/* --- MODE SWITCHER: MANUAL vs AI --- */}
-                <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-2 flex gap-2">
+                {/* <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-2 flex gap-2">
                     <button 
                         onClick={() => { setIsAiMode(false); setAiVariations([]); }}
                         className={clsx(
-                            "flex-1 flex items-center justify-center gap-2 py-3 rounded-lg font-bold transition-all",
+                            "flex-1 flex flex-col items-center justify-center gap-1 py-3 rounded-lg font-bold transition-all relative",
                             !isAiMode ? "bg-slate-100 text-slate-800 shadow-sm" : "text-slate-500 hover:bg-slate-50"
                         )}
                     >
-                        <Layout size={18}/> Manual Builder
+                        <div className="flex items-center gap-2">
+                            <Layout size={18}/> Manual Builder
+                        </div>
+                        <span className={clsx(
+                            "text-xs font-medium px-2 py-0.5 rounded-full",
+                            !isAiMode ? "bg-slate-200 text-slate-600" : "bg-slate-100 text-slate-400"
+                        )}>
+                            Step-by-Step
+                        </span>
                     </button>
                     <button 
                         onClick={() => setIsAiMode(true)}
                         className={clsx(
-                            "flex-1 flex items-center justify-center gap-2 py-3 rounded-lg font-bold transition-all",
+                            "flex-1 flex flex-col items-center justify-center gap-1 py-3 rounded-lg font-bold transition-all relative",
                             isAiMode ? "bg-gradient-to-r from-violet-500 to-fuchsia-500 text-white shadow-md" : "text-slate-500 hover:bg-slate-50"
                         )}
                     >
-                        <Sparkles size={18}/> Generate with AI
+                        <div className="flex items-center gap-2">
+                            <Sparkles size={18}/> Generate with AI
+                        </div>
+                        <span className={clsx(
+                            "text-xs font-medium px-2 py-0.5 rounded-full",
+                            isAiMode ? "bg-white/20 text-white/80" : "bg-slate-100 text-slate-400"
+                        )}>
+                            AI-Powered
+                        </span>
                     </button>
-                </div>
+                </div> */}
 
                 {isAiMode ? (
-                    <div className="bg-white rounded-xl shadow-lg border border-violet-200 overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+                    <div className="bg-white rounded-2xl shadow-lg border border-violet-200 overflow-hidden animate-in fade-in zoom-in-95 duration-200">
                         <div className="bg-gradient-to-r from-violet-50 to-fuchsia-50 p-6 border-b border-violet-100">
                             <div className="flex items-center gap-3 mb-2">
                                 <div className="p-2 bg-white rounded-lg shadow-sm text-violet-600"><Bot size={24}/></div>
@@ -1171,13 +1311,28 @@ const TemplateCreator: React.FC<TemplateCreatorProps> = ({ initialTemplateJson }
                                         <option value="AUTHENTICATION">Authentication</option>
                                     </select>
                                 </div>
-                                <InputField 
-                                    label="Template Name *" 
-                                    placeholder="e.g., summer_sale_2024" 
-                                    value={templateName} 
-                                    onChange={e => setTemplateName(e.target.value)} 
-                                    required 
-                                />
+                                <div>
+                                    <label className="block text-sm font-semibold text-slate-700 mb-1.5">Template Name *</label>
+                                    <input 
+                                        type="text"
+                                        placeholder="e.g., summer_sale_2024" 
+                                        value={templateName} 
+                                        onChange={(e) => {
+                                            // Auto-convert to lowercase and replace spaces with underscores
+                                            const value = e.target.value.toLowerCase().replace(/\s+/g, '_');
+                                            setTemplateName(value);
+                                        }}
+                                        required 
+                                        maxLength={512}
+                                        className="block w-full px-3 py-2.5 bg-white border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 outline-none"
+                                        pattern="[a-z0-9_]+"
+                                        title="Template name must be lowercase letters, numbers, and underscores only"
+                                    />
+                                    <div className="flex justify-between items-center mt-1">
+                                        <p className="text-xs text-slate-500"> Lowercase, alphanumeric characters and underscores only.</p>
+                                        <span className="text-xs text-slate-400">{templateName.length}/512</span>
+                                    </div>
+                                </div>
                                 <div>
                                     <label className="block text-sm font-semibold text-slate-700 mb-1.5">Language *</label>
                                     <select value={language} onChange={e => setLanguage(e.target.value)} className="block w-full px-3 py-2.5 bg-white border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 outline-none">
@@ -1335,7 +1490,7 @@ const TemplateCreator: React.FC<TemplateCreatorProps> = ({ initialTemplateJson }
                                 </FormSection>
 
                                 {/* Horizontal Card Selector */}
-                                <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                                <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
                                     <div className="p-4 border-b border-slate-100 bg-slate-50/50 flex flex-col gap-4">
                                         <div className="flex justify-between items-center">
                                             <h3 className="font-bold text-slate-800 flex items-center gap-2"><Layers size={20}/> Carousel Cards</h3>
@@ -1672,7 +1827,7 @@ const TemplateCreator: React.FC<TemplateCreatorProps> = ({ initialTemplateJson }
 
                         {/* 3. Buttons Configuration (Catalog Fixed Display) */}
                         {templateType === 'Catalog' && (
-                            <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl flex items-center justify-between">
+                            <div className="p-4 bg-slate-50 border border-slate-200 rounded-2xl flex items-center justify-between">
                                 <div className="flex items-center gap-3">
                                     <div className="p-2 bg-white border rounded shadow-sm text-slate-600"><ShoppingBag size={20}/></div>
                                     <div>
@@ -1686,7 +1841,7 @@ const TemplateCreator: React.FC<TemplateCreatorProps> = ({ initialTemplateJson }
 
                         {/* 3. Buttons Configuration (Call Permission Fixed Display) */}
                         {templateType === 'Calling permissions request' && (
-                            <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl flex items-center justify-between mb-6">
+                            <div className="p-4 bg-slate-50 border border-slate-200 rounded-2xl flex items-center justify-between mb-6">
                                 <div className="flex items-center gap-3">
                                     <div className="p-2 bg-white border rounded shadow-sm text-slate-600"><Phone size={20}/></div>
                                     <div>
@@ -1921,18 +2076,45 @@ const TemplateCreator: React.FC<TemplateCreatorProps> = ({ initialTemplateJson }
                             </FormSection>
                         )}
                         
-                        {/* Submit Button */}
-                        <div className="flex justify-end pt-4 pb-12">
+                        {/* Submit Buttons */}
+                        <div className="flex flex-col sm:flex-row justify-end gap-4 pt-4 pb-12">
                             <button 
-                                type="submit" 
+                                type="button"
+                                onClick={handleSaveTemplate}
                                 disabled={isSubmitDisabled} 
-                                className={`px-8 py-3 rounded-lg font-bold text-white shadow-lg transition-all transform active:scale-95 ${
+                                className={`px-6 py-3 rounded-lg font-bold transition-all transform active:scale-95 flex flex-col items-center gap-1 relative ${
                                     isSubmitDisabled 
                                     ? 'bg-slate-300 cursor-not-allowed shadow-none' 
-                                    : 'bg-emerald-600 hover:bg-emerald-700 shadow-emerald-500/30'
+                                    : 'bg-blue-600 hover:bg-blue-700 text-white shadow-lg shadow-blue-500/30'
                                 }`}
                             >
-                                {loading ? 'Processing...' : 'Create Template'}
+                                <div className="flex items-center gap-2">
+                                    <Save size={18} />
+                                    {loading ? 'Saving...' : 'Save as Draft'}
+                                </div>
+                               
+                            </button>
+                            <button 
+                                type="button"
+                                onClick={handleSaveAndCreateMeta}
+                                disabled={isSubmitDisabled} 
+                                className={`px-6 py-3 rounded-lg font-bold transition-all transform active:scale-95 flex flex-col items-center gap-1 relative ${
+                                    isSubmitDisabled 
+                                    ? 'bg-slate-300 cursor-not-allowed shadow-none' 
+                                    : 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-lg shadow-blue-500/30'
+                                }`}
+                            >
+                                <div className="flex items-center gap-2">
+                                    <Cloud size={18} />
+                                    {loadingMeta ? 'Creating...' : (
+                                        isSubmitDisabled ? (
+                                            <span>
+                                                Submit to Meta
+                                            </span>
+                                        ) : 'Submit to Meta'
+                                    )}
+                                </div>
+                                
                             </button>
                         </div>
 
@@ -1960,25 +2142,25 @@ const TemplateCreator: React.FC<TemplateCreatorProps> = ({ initialTemplateJson }
 
             {/* Right Column: Preview */}
             <div className="lg:w-4/12 hidden lg:block">
-                 <div className="sticky top-10">
-                    <div className="flex items-center justify-center mb-3 mt-8  pt-6 text-slate-400 text-sm font-medium uppercase tracking-widest">
-                        <Smartphone size={16}/> Live Preview
+                <div className="sticky top-20">
+                    <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm mb-6">
+                        <div className="flex items-center justify-center gap-2 text-slate-400 text-sm font-medium uppercase tracking-widest mb-6">
+                            <Smartphone size={16}/> Live Preview
+                        </div>
+                        {/* Live Preview renders standard form state OR AI variation depending on mode */}
+                        <Preview 
+                            components={activePreviewComponents} 
+                            category={activePreviewCategory} 
+                            addSecurityRecommendation={addSecurityRecommendation} 
+                            authType={authType}
+                            sampleContents={sampleContents}
+                            headerFile={activePreviewHeaderFile}
+                            headerSampleContents={headerSampleContents}
+                            carouselCards={carouselCards}
+                        />
                     </div>
-                    {/* Live Preview renders standard form state OR AI variation depending on mode */}
-                    <Preview 
-                        components={activePreviewComponents} 
-                        category={activePreviewCategory} 
-                        addSecurityRecommendation={addSecurityRecommendation} 
-                        authType={authType}
-                        sampleContents={sampleContents}
-                        headerFile={activePreviewHeaderFile}
-                        headerSampleContents={headerSampleContents}
-                        carouselCards={carouselCards}
-                    />
-                 </div>
-            </div>
-
-            {/* AI IMAGE GENERATOR MODAL */}
+                </div>
+            </div>            {/* AI IMAGE GENERATOR MODAL */}
             {showImageGenModal && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
                     <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden flex flex-col max-h-[90vh]">
@@ -2068,6 +2250,8 @@ const TemplateCreator: React.FC<TemplateCreatorProps> = ({ initialTemplateJson }
                     </div>
                 </div>
             )}
+                </div>
+            </main>
         </div>
     );
 };
