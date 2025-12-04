@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import Preview from './whatsapp/preview';
+import Preview from './whatsapp/Preview';
 
 let buttonIdCounter = 0;
 let appIdCounter = 0;

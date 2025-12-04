@@ -1,9 +1,8 @@
 import React, { useEffect, useState } from 'react';
-import { Header } from '../../components/whatsapp/Header';
 import { useParams, useNavigate } from 'react-router-dom';
 import TemplateCreator from '../../components/whatsapp/TemplateCreator';
 
-const TemplatesEditor = ({ isSidebarHovered }) => {
+const TemplatesEditor: React.FC = () => {
   const { id } = useParams();
   const [initialJson, setInitialJson] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -23,13 +22,9 @@ const TemplatesEditor = ({ isSidebarHovered }) => {
   if (loading) return <div className="p-6">Loading template...</div>;
 
   return (
-    <>
-      {/* <Header /> */}
-      <div>
-        {/* <div className="p-4"><button className="bg-gray-200 px-3 py-1 rounded" onClick={() => navigate('/wa/templates')}>Back to list</button></div> */}
-        <TemplateCreator isSidebarHovered={isSidebarHovered} initialTemplateJson={initialJson} />
-      </div>
-    </>
+    <div>
+      <TemplateCreator initialTemplateJson={initialJson} />
+    </div>
   );
 };
 
