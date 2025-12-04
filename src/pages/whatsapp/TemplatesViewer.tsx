@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import TemplateCreator from '../../components/whatsapp/TemplateCreator';
 
-const TemplatesEditor: React.FC = () => {
+const TemplatesViewer: React.FC = () => {
   const { id } = useParams();
   const [initialJson, setInitialJson] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -11,17 +11,15 @@ const TemplatesEditor: React.FC = () => {
   useEffect(() => {
     if (!id) return;
     setLoading(true);
-    // /templates/edit/:id
+    // /templates/view/:id
     fetch(`http://localhost:8080/template/${id}`)
       .then(r => {
         if (!r.ok) throw new Error(`HTTP error! status: ${r.status}`);
         return r.json();
       })
       .then(data => {
-        console.log('Fetched template data:', data);
+        console.log('Fetched template data for viewing:', data);
         // Extract the payload field which contains the actual template JSON
-        // The API returns: { id, name, category, status, payload: {...}, ... }
-        // We need to pass payload to TemplateCreator
         if (data && data.payload) {
           console.log('Using payload as initialTemplateJson:', data.payload);
           setInitialJson(data.payload);
@@ -49,9 +47,9 @@ const TemplatesEditor: React.FC = () => {
 
   return (
     <div>
-      <TemplateCreator initialTemplateJson={initialJson} isViewOnly={false} />
+      <TemplateCreator initialTemplateJson={initialJson} isViewOnly={true} />
     </div>
   );
 };
 
-export default TemplatesEditor;
+export default TemplatesViewer;

@@ -153,12 +153,16 @@ export default function LiveChatLogin() {
           setTimeout(() => {
             console.log('⏰ Navigation timeout executing...');
             try {
-              navigate('/wa/dashboard');
+              // Force a complete page reload to ensure authentication state is fresh
+              console.log('🔄 Using window.location.replace for navigation...');
+              window.location.replace('/wa/dashboard');
               console.log('✈️ Navigate called successfully');
             } catch (navError) {
               console.error('❌ Navigation error:', navError);
+              // Fallback to React Router navigation
+              navigate('/wa/dashboard');
             }
-          }, 500);
+          }, 1000); // Increased timeout to ensure state is updated
         } else {
           console.log('⚠️ Navigation blocked by hasNavigatedRef');
         }

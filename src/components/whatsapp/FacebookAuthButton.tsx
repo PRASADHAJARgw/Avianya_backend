@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
-import { supabase } from '@/lib/supabase/client';
+import { useAuthStore } from '@/store/authStore';
 
 interface FacebookAuthButtonProps {
   onSuccess?: (data: { token: string; wabaId?: string }) => void;
@@ -14,6 +14,7 @@ export const FacebookAuthButton: React.FC<FacebookAuthButtonProps> = ({
 }) => {
   const [isLoading, setIsLoading] = useState(false);
   const { toast } = useToast();
+  const { user } = useAuthStore();
 
   useEffect(() => {
     // Listen for OAuth callback messages
@@ -77,10 +78,8 @@ export const FacebookAuthButton: React.FC<FacebookAuthButtonProps> = ({
     try {
       setIsLoading(true);
 
-      // Get current Supabase user
-      const { data: { user }, error: authError } = await supabase.auth.getUser();
-      
-      if (authError || !user) {
+      // Get current authenticated user from our auth store
+      if (!user || !user.id) {
         toast({
           title: 'Authentication Required',
           description: 'Please log in to connect your WhatsApp Business Account',
@@ -92,6 +91,8 @@ export const FacebookAuthButton: React.FC<FacebookAuthButtonProps> = ({
 
       const userId = user.id;
       const backendUrl = import.meta.env.VITE_BACKEND_URL || 'http://localhost:8080';
+      
+      console.log('🚀 Starting OAuth flow for user:', userId);
       
       // Open OAuth popup with user_id
       const width = 600;

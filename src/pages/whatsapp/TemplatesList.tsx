@@ -252,7 +252,7 @@ const TemplatesList = ({ isSidebarHovered }) => {
                             Edit
                           </button>
                           <button
-                            onClick={() => navigate(`/wa/templates/edit/${t.id || t.tempid}`)}
+                            onClick={() => navigate(`/wa/templates/view/${t.id || t.tempid}`)}
                             className="bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all"
                           >
                             <Eye className="w-3.5 h-3.5" />

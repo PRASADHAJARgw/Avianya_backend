@@ -1,3 +1,4 @@
+
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 
@@ -46,16 +47,24 @@ export const useAuthStore = create<AuthState>()(
             body: JSON.stringify({ email, password }),
           });
 
-          if (!response.ok) {
-            const errorData = await response.json();
-            throw new Error(errorData.error || 'Login failed');
-          }
-
           const data = await response.json();
           
+          console.log('📦 Login response data:', data);
+          
+          // Check if login was successful (server can return 200 with success: false)
+          if (!response.ok || data.success === false) {
+            throw new Error(data.message || data.error || 'Login failed');
+          }
+          
+          // Only set auth state if we have valid user and token data
+          if (!data.user || !(data.AccessToken || data.access_token)) {
+            throw new Error('Invalid login response: missing user or token');
+          }
+          
+          // Server returns AccessToken/access_token (handle both formats)
           set({
             user: data.user,
-            token: data.token,
+            token: data.AccessToken || data.access_token,
             isAuthenticated: true,
             isLoading: false,
             error: null,
@@ -72,29 +81,43 @@ export const useAuthStore = create<AuthState>()(
       signup: async (email: string, password: string, name: string, organizationName: string) => {
         set({ isLoading: true, error: null });
         try {
+          const requestBody: Record<string, string> = {
+            email,
+            password,
+            name,
+          };
+          
+          // Only include organization_name if provided (backend may not use it)
+          if (organizationName) {
+            requestBody.organization_name = organizationName;
+          }
+          
           const response = await fetch(`${API_BASE_URL}/auth/signup`, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
             },
-            body: JSON.stringify({
-              email,
-              password,
-              name,
-              organization_name: organizationName,
-            }),
+            body: JSON.stringify(requestBody),
           });
-
-          if (!response.ok) {
-            const errorData = await response.json();
-            throw new Error(errorData.error || 'Signup failed');
-          }
 
           const data = await response.json();
           
+          console.log('📦 Signup response data:', data);
+          
+          // Check if signup was successful (server can return 200 with success: false)
+          if (!response.ok || data.success === false) {
+            throw new Error(data.message || data.error || 'Signup failed');
+          }
+          
+          // Only set auth state if we have valid user and token data
+          if (!data.user || !(data.AccessToken || data.access_token)) {
+            throw new Error('Invalid signup response: missing user or token');
+          }
+          
+          // Server returns AccessToken/access_token (handle both formats)
           set({
             user: data.user,
-            token: data.token,
+            token: data.AccessToken || data.access_token,
             isAuthenticated: true,
             isLoading: false,
             error: null,
@@ -161,6 +184,26 @@ export const useAuthStore = create<AuthState>()(
         token: state.token,
         isAuthenticated: state.isAuthenticated,
       }),
+      onRehydrateStorage: () => (state) => {
+        // Validate rehydrated state - fix inconsistencies
+        if (state) {
+          console.log('🔄 Rehydrating auth state:', state);
+          
+          // If isAuthenticated is true but user or token is missing, fix it
+          if (state.isAuthenticated && (!state.user || !state.token)) {
+            console.warn('⚠️  Inconsistent auth state detected! Fixing...');
+            console.warn('   isAuthenticated:', state.isAuthenticated);
+            console.warn('   user:', state.user);
+            console.warn('   token:', !!state.token);
+            
+            // Reset to unauthenticated state
+            state.isAuthenticated = false;
+            state.user = null;
+            state.token = null;
+            console.log('✅ Auth state reset to unauthenticated');
+          }
+        }
+      },
     }
   )
 );

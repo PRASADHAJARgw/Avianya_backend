@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import Preview from './Preview';
-import { useAuth } from '@/contexts/AuthContext';
+import { useAuthStore } from '@/store/authStore';
 import { TemplateButton, SupportedApp, TemplateJson, SampleContent, HeaderFile, CarouselCard } from './types';
 import { 
     Plus, Trash2, Smartphone, Globe, MessageSquare, 
@@ -156,10 +156,11 @@ const RichTextEditor: React.FC<RichTextEditorProps> = ({ value, onChange, maxLen
 
 interface TemplateCreatorProps {
     initialTemplateJson?: TemplateJson;
+    isViewOnly?: boolean;
 }
 
-const TemplateCreator: React.FC<TemplateCreatorProps> = ({ initialTemplateJson }) => {
-    const { user } = useAuth();
+const TemplateCreator: React.FC<TemplateCreatorProps> = ({ initialTemplateJson, isViewOnly = false }) => {
+    const { user } = useAuthStore();
     
     // Core Info
     const [templateName, setTemplateName] = useState("");
@@ -229,6 +230,56 @@ const TemplateCreator: React.FC<TemplateCreatorProps> = ({ initialTemplateJson }
     const [sendMessageJson, setSendMessageJson] = useState<any>({});
 
     const isInitialMount = useRef(true);
+
+    // Initialize form fields from initialTemplateJson when editing
+    useEffect(() => {
+        if (initialTemplateJson) {
+            console.log('🔄 Initializing form from template data:', initialTemplateJson);
+            
+            // Set basic fields
+            if (initialTemplateJson.name) setTemplateName(initialTemplateJson.name);
+            if (initialTemplateJson.language) setLanguage(initialTemplateJson.language);
+            if (initialTemplateJson.category) setCategory(initialTemplateJson.category);
+            
+            // Parse components to populate form fields
+            const components = initialTemplateJson.components || [];
+            
+            components.forEach((comp: any) => {
+                if (comp.type === 'HEADER') {
+                    if (comp.format === 'TEXT') {
+                        setHeaderType('TEXT');
+                        setHeaderText(comp.text || '');
+                    } else if (comp.format === 'IMAGE' || comp.format === 'VIDEO' || comp.format === 'DOCUMENT') {
+                        setHeaderType(comp.format);
+                    }
+                }
+                
+                if (comp.type === 'BODY') {
+                    setBodyText(comp.text || '');
+                }
+                
+                if (comp.type === 'FOOTER') {
+                    setFooterText(comp.text || '');
+                }
+                
+                if (comp.type === 'BUTTONS' && comp.buttons) {
+                    const parsedButtons = comp.buttons.map((btn: any, idx: number) => ({
+                        id: idx + 1,
+                        type: btn.type,
+                        text: btn.text || '',
+                        url: btn.url || '',
+                        phone: btn.phone_number || '',
+                        urlType: btn.url && btn.url.includes('{{1}}') ? 'dynamic' : 'static',
+                        urlExample: btn.example ? btn.example[0] : '',
+                        codeExample: btn.example || ''
+                    }));
+                    setButtons(parsedButtons);
+                }
+            });
+            
+            console.log('✅ Form initialized with template data');
+        }
+    }, [initialTemplateJson]);
 
     // --- AI GENERATION LOGIC ---
     const handleReferenceImagesChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -597,9 +648,12 @@ const TemplateCreator: React.FC<TemplateCreatorProps> = ({ initialTemplateJson }
             if (category === 'AUTHENTICATION') {
                 if (addSecurityRecommendation) bodyComp.add_security_recommendation = true;
             } else {
-                bodyComp.text = bodyText;
-                const vars = [...new Set(bodyText.match(/{{\d+}}/g) || [])];
-                if (vars.length > 0) bodyComp.example = { body_text: [vars.map(v => { const varNum = v.match(/\d+/)?.[0]; return (varNum && sampleContents[varNum]) || `[Sample]`; })] };
+                // Only add text if bodyText is not empty
+                if (bodyText && bodyText.trim()) {
+                    bodyComp.text = bodyText;
+                    const vars = [...new Set(bodyText.match(/{{\d+}}/g) || [])];
+                    if (vars.length > 0) bodyComp.example = { body_text: [vars.map(v => { const varNum = v.match(/\d+/)?.[0]; return (varNum && sampleContents[varNum]) || `[Sample]`; })] };
+                }
             }
             componentsArr.push(bodyComp);
 
@@ -893,6 +947,19 @@ const TemplateCreator: React.FC<TemplateCreatorProps> = ({ initialTemplateJson }
     };
 
     const validateForm = () => {
+        // Validate template name
+        if (!templateName || templateName.trim() === '') {
+            alert('Error: Template name is required.');
+            return false;
+        }
+        
+        // Validate body text (required for most categories except AUTHENTICATION)
+        if (category !== 'AUTHENTICATION' && (!bodyText || bodyText.trim() === '')) {
+            alert('Error: Body text is required. Please enter message content.');
+            return false;
+        }
+        
+        // Validate buttons
         for (const btn of buttons) {
             if (btn.type === 'URL' && btn.urlType === 'dynamic' && !btn.url?.includes('{{1}}')) {
                 alert(`Error for button "${btn.text || 'Untitled'}": A dynamic URL must contain the placeholder {{1}}.`);
@@ -908,9 +975,34 @@ const TemplateCreator: React.FC<TemplateCreatorProps> = ({ initialTemplateJson }
         
         setLoading(true);
         try {
-            // Save to local database only
-            await new Promise(resolve => setTimeout(resolve, 1500));
+            const payload = {
+                template: templateJson,
+                send_message: sendMessageJson,
+                user_id: user?.id || 'anonymous',
+                user_email: user?.email || '',
+                user_role: user?.role || 'user'
+            };
+
+            const response = await fetch('http://localhost:8080/template/save', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(payload)
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => ({}));
+                throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
+            }
+
+            const data = await response.json();
+            console.log('Template saved to database:', data);
+            
             alert('Template saved to database successfully!');
+        } catch (error) {
+            console.error('Error saving template:', error);
+            alert(`Failed to save template: ${error instanceof Error ? error.message : 'Unknown error'}`);
         } finally {
             setLoading(false);
         }
@@ -922,9 +1014,41 @@ const TemplateCreator: React.FC<TemplateCreatorProps> = ({ initialTemplateJson }
         
         setLoadingMeta(true);
         try {
-            // Save to DB and create template in Meta
-            await new Promise(resolve => setTimeout(resolve, 2500));
-            alert('Template saved to database and created in Meta successfully!');
+            const payload = {
+                template: templateJson,
+                send_message: sendMessageJson,
+                user_id: user?.id || 'anonymous',
+                user_email: user?.email || '',
+                user_role: user?.role || 'user'
+            };
+
+            const response = await fetch('http://localhost:8080/template/save-and-submit-meta', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(payload)
+            });
+
+            const data = await response.json();
+            
+            if (!response.ok) {
+                // Handle partial success (saved to DB but failed to submit to Meta)
+                if (response.status === 206) { // Partial Content
+                    console.warn('Template saved to database but failed to submit to Meta:', data);
+                    alert(`Template saved to database but failed to submit to Meta: ${data.error || 'Unknown error'}`);
+                } else {
+                    throw new Error(data.message || `HTTP error! status: ${response.status}`);
+                }
+                return;
+            }
+
+            console.log('Template saved and submitted to Meta:', data);
+            alert(`Template saved to database and created in Meta successfully! Meta Template ID: ${data.meta_template_id}`);
+            
+        } catch (error) {
+            console.error('Error saving and submitting template:', error);
+            alert(`Failed to save and submit template: ${error instanceof Error ? error.message : 'Unknown error'}`);
         } finally {
             setLoadingMeta(false);
         }
@@ -1045,35 +1169,38 @@ const TemplateCreator: React.FC<TemplateCreatorProps> = ({ initialTemplateJson }
                             {/* Responsive spacer - smaller now */}
                             {/* <div className="hidden lg:block w-20 ml-4 mr-4 xl:w-12"></div> */}
                            
-                            {/* Save Buttons */}
-                            {/* <div className="flex items-center pl-3 pr-3 gap-10 flex-shrink-0"> */}
-                                <button 
-                                    type="button"
-                                    onClick={handleSaveTemplate}
-                                    disabled={isSubmitDisabled} 
-                                    className={`px-4 py-2 rounded-lg font-medium transition-all flex items-center gap-2 text-sm ${
-                                        isSubmitDisabled 
-                                        ? 'bg-slate-300 cursor-not-allowed shadow-none' 
-                                        : 'bg-blue-600 hover:bg-blue-700 text-white shadow-md shadow-blue-500/30'
-                                    }`}
-                                >
-                                    <Save size={16} />
-                                    {loading ? 'Saving...' : 'Save as Draft'}
-                                </button>
-                                
-                                <button 
-                                    type="button"
-                                    onClick={handleSaveAndCreateMeta}
-                                    disabled={isSubmitDisabled} 
-                                    className={`px-4 py-2 rounded-lg font-medium transition-all flex items-center gap-2 text-sm ${
-                                        isSubmitDisabled 
-                                        ? 'bg-slate-300 cursor-not-allowed shadow-none' 
-                                        : 'bg-emerald-600 hover:bg-emerald-700 text-white shadow shadow-emerald-500/30'
-                                    }`}
-                                >
-                                    <Cloud size={16} />
-                                    {loadingMeta ? 'Creating...' : 'Submit to Meta'}
-                                </button>
+                            {/* Save Buttons - Hide in view-only mode */}
+                            {!isViewOnly && (
+                                <>
+                                    <button 
+                                        type="button"
+                                        onClick={handleSaveTemplate}
+                                        disabled={isSubmitDisabled} 
+                                        className={`px-4 py-2 rounded-lg font-medium transition-all flex items-center gap-2 text-sm ${
+                                            isSubmitDisabled 
+                                            ? 'bg-slate-300 cursor-not-allowed shadow-none' 
+                                            : 'bg-blue-600 hover:bg-blue-700 text-white shadow-md shadow-blue-500/30'
+                                        }`}
+                                    >
+                                        <Save size={16} />
+                                        {loading ? 'Saving...' : 'Save as Draft'}
+                                    </button>
+                                    
+                                    <button 
+                                        type="button"
+                                        onClick={handleSaveAndCreateMeta}
+                                        disabled={isSubmitDisabled} 
+                                        className={`px-4 py-2 rounded-lg font-medium transition-all flex items-center gap-2 text-sm ${
+                                            isSubmitDisabled 
+                                            ? 'bg-slate-300 cursor-not-allowed shadow-none' 
+                                            : 'bg-emerald-600 hover:bg-emerald-700 text-white shadow shadow-emerald-500/30'
+                                        }`}
+                                    >
+                                        <Cloud size={16} />
+                                        {loadingMeta ? 'Creating...' : 'Submit to Meta'}
+                                    </button>
+                                </>
+                            )}
                             </div>
                         </div>
                     </div>
@@ -2076,47 +2203,49 @@ const TemplateCreator: React.FC<TemplateCreatorProps> = ({ initialTemplateJson }
                             </FormSection>
                         )}
                         
-                        {/* Submit Buttons */}
-                        <div className="flex flex-col sm:flex-row justify-end gap-4 pt-4 pb-12">
-                            <button 
-                                type="button"
-                                onClick={handleSaveTemplate}
-                                disabled={isSubmitDisabled} 
-                                className={`px-6 py-3 rounded-lg font-bold transition-all transform active:scale-95 flex flex-col items-center gap-1 relative ${
-                                    isSubmitDisabled 
-                                    ? 'bg-slate-300 cursor-not-allowed shadow-none' 
-                                    : 'bg-blue-600 hover:bg-blue-700 text-white shadow-lg shadow-blue-500/30'
-                                }`}
-                            >
-                                <div className="flex items-center gap-2">
-                                    <Save size={18} />
-                                    {loading ? 'Saving...' : 'Save as Draft'}
-                                </div>
-                               
-                            </button>
-                            <button 
-                                type="button"
-                                onClick={handleSaveAndCreateMeta}
-                                disabled={isSubmitDisabled} 
-                                className={`px-6 py-3 rounded-lg font-bold transition-all transform active:scale-95 flex flex-col items-center gap-1 relative ${
-                                    isSubmitDisabled 
-                                    ? 'bg-slate-300 cursor-not-allowed shadow-none' 
-                                    : 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-lg shadow-blue-500/30'
-                                }`}
-                            >
-                                <div className="flex items-center gap-2">
-                                    <Cloud size={18} />
-                                    {loadingMeta ? 'Creating...' : (
-                                        isSubmitDisabled ? (
-                                            <span>
-                                                Submit to Meta
-                                            </span>
-                                        ) : 'Submit to Meta'
-                                    )}
-                                </div>
-                                
-                            </button>
-                        </div>
+                        {/* Submit Buttons - Hide in view-only mode */}
+                        {!isViewOnly && (
+                            <div className="flex flex-col sm:flex-row justify-end gap-4 pt-4 pb-12">
+                                <button 
+                                    type="button"
+                                    onClick={handleSaveTemplate}
+                                    disabled={isSubmitDisabled} 
+                                    className={`px-6 py-3 rounded-lg font-bold transition-all transform active:scale-95 flex flex-col items-center gap-1 relative ${
+                                        isSubmitDisabled 
+                                        ? 'bg-slate-300 cursor-not-allowed shadow-none' 
+                                        : 'bg-blue-600 hover:bg-blue-700 text-white shadow-lg shadow-blue-500/30'
+                                    }`}
+                                >
+                                    <div className="flex items-center gap-2">
+                                        <Save size={18} />
+                                        {loading ? 'Saving...' : 'Save as Draft'}
+                                    </div>
+                                   
+                                </button>
+                                <button 
+                                    type="button"
+                                    onClick={handleSaveAndCreateMeta}
+                                    disabled={isSubmitDisabled} 
+                                    className={`px-6 py-3 rounded-lg font-bold transition-all transform active:scale-95 flex flex-col items-center gap-1 relative ${
+                                        isSubmitDisabled 
+                                        ? 'bg-slate-300 cursor-not-allowed shadow-none' 
+                                        : 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-lg shadow-blue-500/30'
+                                    }`}
+                                >
+                                    <div className="flex items-center gap-2">
+                                        <Cloud size={18} />
+                                        {loadingMeta ? 'Creating...' : (
+                                            isSubmitDisabled ? (
+                                                <span>
+                                                    Submit to Meta
+                                                </span>
+                                            ) : 'Submit to Meta'
+                                        )}
+                                    </div>
+                                    
+                                </button>
+                            </div>
+                        )}
 
                         {/* Developer Debug Info */}
                         <div className="border-t pt-8">

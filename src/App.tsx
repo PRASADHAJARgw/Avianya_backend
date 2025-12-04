@@ -9,6 +9,7 @@ import NotFound from "./pages/whatsapp/NotFound"; // Ensure NotFound is imported
 import Templates from "./components/whatsapp/TemplateCreator";
 import TemplatesList from './pages/whatsapp/TemplatesList';
 import TemplatesEditor from './pages/whatsapp/TemplatesEditor';
+import TemplatesViewer from './pages/whatsapp/TemplatesViewer';
 import Campaigns from './pages/whatsapp/Campaigns';
 // Live Chat with Auth
 import LiveChatLogin from './pages/whatsapp/LiveChatLogin';
@@ -44,10 +45,18 @@ import InstagramNotFound from './pages/instagram/NotFound';
 // const CreateNew = () => <div><h1>Create New Bot Content</h1></div>; // This is replaced by Index
 
 function RootRoutes() {
-  const { user, isAuthenticated } = useAuthStore();
+  const { user, isAuthenticated, token } = useAuthStore();
+  
+  // Debug authentication state
+  console.log('🔍 AUTH DEBUG - App.tsx RootRoutes:');
+  console.log('   isAuthenticated:', isAuthenticated);
+  console.log('   user:', user);
+  console.log('   token exists:', !!token);
+  console.log('   token preview:', token?.substring(0, 20) + '...');
   
   // If user is not authenticated, show only login routes
   if (!isAuthenticated || !user) {
+    console.log('❌ User NOT authenticated - showing login routes');
     return (
       <Routes>
         <Route path="/" element={<LiveChatLogin />} />
@@ -60,6 +69,7 @@ function RootRoutes() {
     );
   }
   
+  console.log('✅ User IS authenticated - showing main app routes');
   // If user is authenticated, show main app routes
   return (
       <MainLayout>
@@ -84,8 +94,9 @@ function RootRoutes() {
           {/* WhatsApp (WA) routes */}
           <Route path="/wa/dashboard" element={<WaDashboard />} />
           <Route path="/wa/templates" element={<TemplatesList isSidebarHovered={false} />} />
-          <Route path="/wa/templates/new" element={<Templates isSidebarHovered={false} initialTemplateJson={null} />} />
-          <Route path="/wa/templates/edit/:id" element={<TemplatesEditor isSidebarHovered={false} />} />
+          <Route path="/wa/templates/new" element={<Templates initialTemplateJson={null} />} />
+          <Route path="/wa/templates/edit/:id" element={<TemplatesEditor />} />
+          <Route path="/wa/templates/view/:id" element={<TemplatesViewer />} />
           <Route path="/wa/createNew" element={<Index  />} />
           <Route path="/wa/campaigns" element={<Campaigns />} />
           {/* Instagram (IG) routes */}

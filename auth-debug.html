@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Auth Debug Tool</title>
+    <style>
+        body { font-family: monospace; padding: 20px; background: #1e1e1e; color: #d4d4d4; }
+        button { padding: 10px 20px; margin: 5px; cursor: pointer; font-size: 14px; }
+        pre { background: #2d2d2d; padding: 15px; border-radius: 5px; overflow-x: auto; }
+        .success { color: #4ec9b0; }
+        .error { color: #f48771; }
+        .warning { color: #dcdcaa; }
+        h2 { color: #569cd6; }
+    </style>
+</head>
+<body>
+    <h1>🔍 Authentication Debug Tool</h1>
+    
+    <h2>Current Auth State:</h2>
+    <pre id="authState"></pre>
+    
+    <h2>Actions:</h2>
+    <button onclick="clearStorage()">🗑️ Clear Storage</button>
+    <button onclick="checkAuth()">🔄 Refresh State</button>
+    <button onclick="testLogin()">🔐 Test Login</button>
+    
+    <h2>Console:</h2>
+    <pre id="console"></pre>
+
+    <script>
+        function log(message, type = 'info') {
+            const console = document.getElementById('console');
+            const timestamp = new Date().toLocaleTimeString();
+            const className = type === 'error' ? 'error' : type === 'success' ? 'success' : type === 'warning' ? 'warning' : '';
+            console.innerHTML += `<span class="${className}">[${timestamp}] ${message}</span>\n`;
+            console.scrollTop = console.scrollHeight;
+        }
+
+        function checkAuth() {
+            try {
+                const authStorage = localStorage.getItem('auth-storage');
+                if (!authStorage) {
+                    document.getElementById('authState').textContent = 'No auth data found in localStorage';
+                    log('❌ No auth data in localStorage', 'error');
+                    return;
+                }
+                
+                const parsed = JSON.parse(authStorage);
+                document.getElementById('authState').textContent = JSON.stringify(parsed, null, 2);
+                
+                if (parsed.state) {
+                    const { isAuthenticated, user, token } = parsed.state;
+                    log(`✅ isAuthenticated: ${isAuthenticated}`, isAuthenticated ? 'success' : 'error');
+                    log(`👤 user: ${user ? user.email : 'null'}`, user ? 'success' : 'error');
+                    log(`🔑 token: ${token ? 'exists (' + token.substring(0, 20) + '...)' : 'null'}`, token ? 'success' : 'error');
+                }
+            } catch (e) {
+                log('❌ Error parsing auth data: ' + e.message, 'error');
+            }
+        }
+
+        function clearStorage() {
+            localStorage.clear();
+            sessionStorage.clear();
+            log('🗑️ Storage cleared!', 'success');
+            log('⚠️  Please refresh the page', 'warning');
+            checkAuth();
+        }
+
+        async function testLogin() {
+            log('🔐 Testing login...', 'info');
+            try {
+                const response = await fetch('http://localhost:8080/api/v2/auth/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        email: 'test@example.com',
+                        password: 'password123'
+                    })
+                });
+
+                const data = await response.json();
+                log('📦 Server response: ' + JSON.stringify(data, null, 2), response.ok ? 'success' : 'error');
+                
+                if (response.ok && data.AccessToken) {
+                    log('✅ Login successful!', 'success');
+                    log('🔑 AccessToken received: ' + data.AccessToken.substring(0, 30) + '...', 'success');
+                    log('👤 User: ' + JSON.stringify(data.user), 'success');
+                } else {
+                    log('❌ Login failed: ' + (data.message || 'Unknown error'), 'error');
+                }
+            } catch (e) {
+                log('❌ Network error: ' + e.message, 'error');
+            }
+        }
+
+        // Auto-check on load
+        checkAuth();
+        log('🚀 Auth Debug Tool loaded', 'success');
+    </script>
+</body>
+</html>
