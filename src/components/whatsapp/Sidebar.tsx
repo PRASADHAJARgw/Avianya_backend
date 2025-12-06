@@ -30,6 +30,8 @@ import {
   LogOut,
   Image,
   Video,
+  Send,
+  FileText,
 } from 'lucide-react';
 import { Button } from '../ui/button';
 import {
@@ -198,11 +200,13 @@ const Sidebar: React.FC<SidebarProps> = ({ onLinkClick, onHoverChange, onManager
                         gap: '0.5rem',
                       }}
                     >
-                      <MessageSquare size={27} style={{ color: currentPath === '/wa/templates' ? activeColor : '#6B7280', flexShrink: 0 }} />
+                      {/* <FileText className="text-emerald-500 w-7 h-7" /> */}
+                      <FileText size={27} style={{ color: currentPath === '/wa/templates' ? activeColor : '#6B7280', flexShrink: 0 }} />
                       <p className="text_4" style={{ margin: 0, fontWeight: currentPath === '/wa/templates' ? '600' : '500', whiteSpace: 'nowrap' }}>Templates</p>
                     </div>
                   </Link>
                 </li>
+                {/*
                 <li className="create-new" onClick={() => onLinkClick('wa-createNew')}>
                   <Link to="/wa/createNew" className="sidebar-link">
                     <div 
@@ -226,10 +230,12 @@ const Sidebar: React.FC<SidebarProps> = ({ onLinkClick, onHoverChange, onManager
                     </div>
                   </Link>
                 </li>
+                */}
                 <li className="manage-campaigns" onClick={() => onLinkClick('wa-campaigns')}>
                   <Link to="/wa/campaigns" className="sidebar-link">
                     <div 
                       className="sidebar-item"
+                      title="Create and manage WhatsApp broadcast campaigns"
                       style={{
                         background: currentPath === '/wa/campaigns' ? activeBg : 'transparent',
                         color: currentPath === '/wa/campaigns' ? activeColor : '#374151',
@@ -244,7 +250,8 @@ const Sidebar: React.FC<SidebarProps> = ({ onLinkClick, onHoverChange, onManager
                         gap: '0.5rem',
                       }}
                     >
-                      <Megaphone size={27} style={{ color: currentPath === '/wa/campaigns' ? activeColor : '#6B7280', flexShrink: 0 }} />
+                      {/* <Send className="text-emerald-500 w-7 h-7" /> */}
+                      <Send size={27} style={{ color: currentPath === '/wa/campaigns' ? activeColor : '#6B7280', flexShrink: 0 }} />
                       <p className="text_4" style={{ margin: 0, fontWeight: currentPath === '/wa/campaigns' ? '600' : '500', whiteSpace: 'nowrap' }}>Campaigns</p>
                     </div>
                   </Link>
@@ -276,6 +283,30 @@ const Sidebar: React.FC<SidebarProps> = ({ onLinkClick, onHoverChange, onManager
                     <MessageCircle size={27} style={{ color: currentPath.startsWith('/wa/live-chat') ? activeColor : '#6B7280', flexShrink: 0 }} />
                     <p className="text_4" style={{ margin: 0, fontWeight: currentPath.startsWith('/wa/live-chat') ? '600' : '500', whiteSpace: 'nowrap' }}>Live Chat</p>
                   </div>
+                </li>
+                <li className="settings" onClick={() => onLinkClick('wa-settings')}>
+                  <Link to="/wa/settings" className="sidebar-link">
+                    <div 
+                      className="sidebar-item"
+                      title="Manage your account, phone numbers, and business preferences"
+                      style={{
+                        background: currentPath === '/wa/settings' ? activeBg : 'transparent',
+                        color: currentPath === '/wa/settings' ? activeColor : '#374151',
+                        padding: '0.5rem 0.25rem',
+                        borderRadius: '7px',
+                        marginLeft: '0.75rem',
+                        marginRight: '0.75rem',
+                        transition: 'all 0.2s ease',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '0.5rem',
+                        cursor: 'pointer',
+                      }}
+                    >
+                      <Settings size={27} style={{ color: currentPath === '/wa/settings' ? activeColor : '#6B7280', flexShrink: 0 }} />
+                      <p className="text_4" style={{ margin: 0, fontWeight: currentPath === '/wa/settings' ? '600' : '500', whiteSpace: 'nowrap' }}>Settings</p>
+                    </div>
+                  </Link>
                 </li>
               </>
             ) : manager === 'instagram' ? (

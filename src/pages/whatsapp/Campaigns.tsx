@@ -31,6 +31,11 @@ interface Template {
   category?: string;
   status?: string;
   variables?: string[];
+  components?: any[];
+  payload?: {
+    components?: any[];
+    [key: string]: any;
+  };
 }
 
 interface Campaign {
@@ -68,20 +73,28 @@ const Campaigns = () => {
     if (!user?.id) return;
     
     setLoading(true);
+    setError(null);
     try {
-      const response = await fetch('http://localhost:8080/campaigns', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ user_id: user.id }),
+      const response = await fetch(`http://localhost:8080/campaigns?user_id=${user.id}`, {
+        method: 'GET',
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${useAuthStore.getState().token}`
+        },
       });
       
-      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
+      }
       
       const data = await response.json();
-      setCampaigns(data || []);
+      // Ensure data is always an array
+      setCampaigns(Array.isArray(data) ? data : []);
     } catch (err) {
       console.error('Fetch campaigns error:', err);
-      setError(String(err));
+      setError(err instanceof Error ? err.message : String(err));
+      setCampaigns([]); // Set empty array on error
     } finally {
       setLoading(false);
     }
@@ -101,6 +114,8 @@ const Campaigns = () => {
       if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
       
       const data = await response.json();
+      console.log('📋 Templates loaded:', data?.length || 0, 'templates');
+      console.log('📋 First template:', data?.[0]);
       setTemplates(data || []);
     } catch (err) {
       console.error('Fetch templates error:', err);
@@ -115,6 +130,17 @@ const Campaigns = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.id]);
 
+  // Handle template selection
+  const handleTemplateChange = (templateIdStr: string) => {
+    console.log('🎯 Template selected:', templateIdStr);
+    setSelectedTemplate(templateIdStr);
+    
+    // Find and log the selected template
+    const templateId = parseInt(templateIdStr, 10);
+    const template = templates.find(t => (t.id || t.tempid) === templateId);
+    console.log('🎯 Template found:', template ? template.temp_title || template.name : 'NOT FOUND');
+  };
+
   // Handle Excel file upload
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -126,33 +152,247 @@ const Campaigns = () => {
     reader.onload = (event) => {
       try {
         const data = event.target?.result;
-        const workbook = XLSX.read(data, { type: 'binary' });
-        const sheetName = workbook.SheetNames[0];
-        const worksheet = workbook.Sheets[sheetName];
-        const jsonData = XLSX.utils.sheet_to_json(worksheet) as Record<string, string | number>[];
+        const fileExtension = file.name.split('.').pop()?.toLowerCase();
         
-        setExcelData(jsonData);
-        console.log('Excel data loaded:', jsonData);
+        // Handle CSV files
+        if (fileExtension === 'csv') {
+          const workbook = XLSX.read(data, { type: 'binary' });
+          const sheetName = workbook.SheetNames[0];
+          const worksheet = workbook.Sheets[sheetName];
+          const jsonData = XLSX.utils.sheet_to_json(worksheet) as Record<string, string | number>[];
+          
+          setExcelData(jsonData);
+          console.log('✅ CSV data loaded:', jsonData.length, 'rows');
+        } 
+        // Handle Excel files (.xlsx, .xls)
+        else {
+          const workbook = XLSX.read(data, { type: 'binary' });
+          const sheetName = workbook.SheetNames[0];
+          const worksheet = workbook.Sheets[sheetName];
+          const jsonData = XLSX.utils.sheet_to_json(worksheet) as Record<string, string | number>[];
+          
+          setExcelData(jsonData);
+          console.log('✅ Excel data loaded:', jsonData.length, 'rows');
+        }
       } catch (err) {
-        console.error('Error parsing Excel:', err);
-        setError('Failed to parse Excel file');
+        console.error('❌ Error parsing file:', err);
+        setError('Failed to parse file. Please ensure it\'s a valid Excel or CSV file.');
       }
     };
     
     reader.readAsBinaryString(file);
   };
 
-  // Download sample Excel template
+  // Download sample Excel template based on selected template
   const downloadSampleTemplate = () => {
+    if (!selectedTemplate) {
+      alert('Please select a template first');
+      return;
+    }
+
+    // Find the selected template (convert to number for comparison)
+    const templateId = typeof selectedTemplate === 'string' ? parseInt(selectedTemplate, 10) : selectedTemplate;
+    const template = templates.find(t => (t.id || t.tempid) === templateId || (t.id || t.tempid) === selectedTemplate);
+    if (!template) {
+      console.error('Template not found. Looking for:', templateId, 'or', selectedTemplate);
+      console.error('Available templates:', templates.map(t => ({ id: t.id, tempid: t.tempid, name: t.temp_title || t.name })));
+      alert('Template not found. Please try selecting the template again.');
+      return;
+    }
+
+    console.log('Selected template for sample:', template);
+
+    // Parse template components to find variables
+    const components = template.components || (template.payload?.components);
+    console.log('Template components:', components);
+
+    // Build CSV columns
+    const columns: string[] = ['country_code', 'phone_number'];
+    const sampleRow: Record<string, string> = {
+      country_code: '+91',
+      phone_number: '7755991051'
+    };
+
+    // Extract variables from components
+    if (Array.isArray(components)) {
+      components.forEach((component: any) => {
+        const componentType = component.type?.toLowerCase();
+        
+        // Check for text with {{}} placeholders or example data
+        if (component.text && typeof component.text === 'string') {
+          // Find {{1}}, {{2}}, etc.
+          const matches = component.text.match(/\{\{(\d+)\}\}/g);
+          if (matches) {
+            matches.forEach((match) => {
+              const paramNum = match.replace(/[{}]/g, '');
+              const columnName = `${componentType}_param_${paramNum}`;
+              if (!columns.includes(columnName)) {
+                columns.push(columnName);
+                sampleRow[columnName] = `Sample ${componentType} ${paramNum}`;
+              }
+            });
+          }
+        }
+
+        // Check for example data in component
+        if (component.example) {
+          if (componentType === 'header' && component.example.header_text) {
+            component.example.header_text.forEach((_: any, index: number) => {
+              const columnName = `header_param_${index + 1}`;
+              if (!columns.includes(columnName)) {
+                columns.push(columnName);
+                sampleRow[columnName] = `Sample header ${index + 1}`;
+              }
+            });
+          }
+          if (componentType === 'body' && component.example.body_text) {
+            component.example.body_text.forEach((textArray: string[]) => {
+              textArray.forEach((_: string, index: number) => {
+                const columnName = `body_param_${index + 1}`;
+                if (!columns.includes(columnName)) {
+                  columns.push(columnName);
+                  sampleRow[columnName] = `Sample body ${index + 1}`;
+                }
+              });
+            });
+          }
+        }
+
+        // Check for buttons with dynamic URLs
+        if (componentType === 'button' && component.example) {
+          if (component.example.url_suffix || component.example.button_parameters) {
+            const columnName = `button_${component.sub_type || 'url'}_param`;
+            if (!columns.includes(columnName)) {
+              columns.push(columnName);
+              sampleRow[columnName] = 'sample-url-param';
+            }
+          }
+        }
+      });
+    }
+
+    // Create sample data with 2 rows
     const sampleData = [
-      { phone_number: '+1234567890', variable1: 'John', variable2: 'Doe', variable3: 'Sample' },
-      { phone_number: '+0987654321', variable1: 'Jane', variable2: 'Smith', variable3: 'Example' },
+      sampleRow,
+      {
+        country_code: '+91',
+        phone_number: '7755991051',
+        ...Object.keys(sampleRow).reduce((acc, key) => {
+          if (key !== 'country_code' && key !== 'phone_number') {
+            acc[key] = sampleRow[key].replace('Sample', 'Example');
+          }
+          return acc;
+        }, {} as Record<string, string>)
+      }
     ];
-    
+
+    // Create Excel file
     const ws = XLSX.utils.json_to_sheet(sampleData);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Recipients');
-    XLSX.writeFile(wb, 'campaign_template_sample.xlsx');
+    
+    const templateName = template.name || template.temp_title || 'template';
+    XLSX.writeFile(wb, `${templateName}_sample.xlsx`);
+  };
+
+  // Download sample CSV template
+  const downloadSampleCSV = () => {
+    if (!selectedTemplate) {
+      alert('Please select a template first');
+      return;
+    }
+
+    // Find the selected template
+    const templateId = typeof selectedTemplate === 'string' ? parseInt(selectedTemplate, 10) : selectedTemplate;
+    const template = templates.find(t => (t.id || t.tempid) === templateId || (t.id || t.tempid) === selectedTemplate);
+    if (!template) {
+      alert('Template not found. Please try selecting the template again.');
+      return;
+    }
+
+    // Parse template components to find variables
+    const components = template.components || (template.payload?.components);
+
+    // Build CSV columns
+    const columns: string[] = ['country_code', 'phone_number'];
+    const sampleRow: Record<string, string> = {
+      country_code: '+91',
+      phone_number: '7755991051'
+    };
+
+    // Extract variables from components
+    if (components && Array.isArray(components)) {
+      components.forEach((component: any) => {
+        const componentType = component.type?.toLowerCase();
+
+        if (component.example) {
+          if (componentType === 'header' && component.example.header_text) {
+            component.example.header_text.forEach((_: any, index: number) => {
+              const columnName = `header_param_${index + 1}`;
+              if (!columns.includes(columnName)) {
+                columns.push(columnName);
+                sampleRow[columnName] = `Sample header ${index + 1}`;
+              }
+            });
+          }
+          if (componentType === 'body' && component.example.body_text) {
+            component.example.body_text.forEach((textArray: string[]) => {
+              textArray.forEach((_: string, index: number) => {
+                const columnName = `body_param_${index + 1}`;
+                if (!columns.includes(columnName)) {
+                  columns.push(columnName);
+                  sampleRow[columnName] = `Sample body ${index + 1}`;
+                }
+              });
+            });
+          }
+        }
+
+        if (componentType === 'button' && component.example) {
+          if (component.example.url_suffix || component.example.button_parameters) {
+            const columnName = `button_${component.sub_type || 'url'}_param`;
+            if (!columns.includes(columnName)) {
+              columns.push(columnName);
+              sampleRow[columnName] = 'sample-url-param';
+            }
+          }
+        }
+      });
+    }
+
+    // Create sample data with 2 rows
+    const sampleData = [
+      sampleRow,
+      {
+        country_code: '+91',
+        phone_number: '7755991051',
+        ...Object.keys(sampleRow).reduce((acc, key) => {
+          if (key !== 'country_code' && key !== 'phone_number') {
+            acc[key] = sampleRow[key].replace('Sample', 'Example');
+          }
+          return acc;
+        }, {} as Record<string, string>)
+      }
+    ];
+
+    // Convert to CSV
+    const csvContent = [
+      columns.join(','), // Header row
+      ...sampleData.map(row => columns.map(col => row[col] || '').join(',')) // Data rows
+    ].join('\n');
+
+    // Download CSV
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    const templateName = template.name || template.temp_title || 'template';
+    
+    link.setAttribute('href', url);
+    link.setAttribute('download', `${templateName}_sample.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
   };
 
   // Create Campaign
@@ -163,22 +403,42 @@ const Campaigns = () => {
     }
 
     setCreating(true);
+    setError(null);
     try {
+      // Convert template ID to number
+      const templateId = typeof selectedTemplate === 'string' ? parseInt(selectedTemplate, 10) : selectedTemplate;
+      
+      console.log('📤 Creating campaign with data:', {
+        user_id: user.id,
+        name: campaignName,
+        template_id: templateId,
+        recipients_count: excelData.length,
+        first_recipient: excelData[0]
+      });
+      
       const response = await fetch('http://localhost:8080/campaigns/create', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${useAuthStore.getState().token}`
+        },
         body: JSON.stringify({
           user_id: user.id,
           name: campaignName,
-          template_id: selectedTemplate,
+          template_id: templateId,
           recipients: excelData,
         }),
       });
 
-      if (!response.ok) throw new Error('Failed to create campaign');
+      const responseText = await response.text();
+      console.log('📥 Server response:', response.status, responseText);
 
-      const result = await response.json();
-      console.log('Campaign created:', result);
+      if (!response.ok) {
+        throw new Error(responseText || `Failed to create campaign (${response.status})`);
+      }
+
+      const result = JSON.parse(responseText);
+      console.log('✅ Campaign created:', result);
       
       // Reset form
       setCampaignName('');
@@ -190,8 +450,8 @@ const Campaigns = () => {
       // Refresh campaigns
       fetchCampaigns();
     } catch (err) {
-      console.error('Create campaign error:', err);
-      setError(String(err));
+      console.error('❌ Create campaign error:', err);
+      setError(err instanceof Error ? err.message : String(err));
     } finally {
       setCreating(false);
     }
@@ -200,17 +460,56 @@ const Campaigns = () => {
   // Send Campaign
   const handleSendCampaign = async (campaignId: string) => {
     try {
+      console.log('🚀 Sending campaign:', campaignId);
+      
+      // Ask for worker and rate limit settings
+      const workerCount = prompt('Number of workers (1-100):', '10');
+      const rateLimit = prompt('Messages per second (1-1000):', '100');
+      
+      if (!workerCount || !rateLimit) {
+        console.log('❌ Campaign send cancelled');
+        return;
+      }
+      
+      const workers = parseInt(workerCount, 10);
+      const rate = parseInt(rateLimit, 10);
+      
+      if (workers < 1 || workers > 100 || rate < 1 || rate > 1000) {
+        setError('Workers must be 1-100, rate must be 1-1000 msg/sec');
+        return;
+      }
+      
+      console.log('📤 Starting campaign with:', { workers, rate });
+      
       const response = await fetch(`http://localhost:8080/campaigns/${campaignId}/send`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ user_id: user.id }),
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${useAuthStore.getState().token}`
+        },
+        body: JSON.stringify({ 
+          user_id: user.id,
+          worker_count: workers,
+          rate_limit: rate
+        }),
       });
 
-      if (!response.ok) throw new Error('Failed to send campaign');
+      const responseText = await response.text();
+      console.log('📥 Send response:', response.status, responseText);
+      
+      if (!response.ok) {
+        throw new Error(responseText || `Failed to send campaign (${response.status})`);
+      }
 
+      const data = JSON.parse(responseText);
+      console.log('✅ Campaign started:', data);
+      
+      setError(null);
       fetchCampaigns();
+      
+      alert(`✅ Campaign started!\n\nWorkers: ${workers}\nRate: ${rate} msg/sec\nCapacity: ${(rate * 3600).toLocaleString()} msg/hour`);
     } catch (err) {
-      console.error('Send campaign error:', err);
+      console.error('❌ Send campaign error:', err);
       setError(String(err));
     }
   };
@@ -273,6 +572,9 @@ const Campaigns = () => {
 
   // Get status badge
   const getStatusBadge = (status: string) => {
+    // Capitalize first letter for display
+    const displayStatus = status.charAt(0).toUpperCase() + status.slice(1).toLowerCase();
+    
     const statusMap = {
       'Draft': { bg: 'bg-slate-50', text: 'text-slate-700', border: 'border-slate-200', icon: <Clock className="w-3 h-3" /> },
       'Active': { bg: 'bg-emerald-50', text: 'text-emerald-700', border: 'border-emerald-200', icon: <Play className="w-3 h-3" /> },
@@ -280,20 +582,21 @@ const Campaigns = () => {
       'Completed': { bg: 'bg-blue-50', text: 'text-blue-700', border: 'border-blue-200', icon: <CheckCircle className="w-3 h-3" /> },
       'Stopped': { bg: 'bg-red-50', text: 'text-red-700', border: 'border-red-200', icon: <StopCircle className="w-3 h-3" /> },
     };
-    const style = statusMap[status] || statusMap['Draft'];
+    const style = statusMap[displayStatus] || statusMap['Draft'];
     return (
       <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold border ${style.bg} ${style.text} ${style.border}`}>
         {style.icon}
-        {status}
+        {displayStatus}
       </span>
     );
   };
 
   // Calculate stats
-  const totalCampaigns = campaigns.length;
-  const activeCampaigns = campaigns.filter(c => c.status === 'Active').length;
-  const totalSent = campaigns.reduce((sum, c) => sum + (c.sent || 0), 0);
-  const totalRecipients = campaigns.reduce((sum, c) => sum + (c.total_recipients || 0), 0);
+  const campaignsArray = Array.isArray(campaigns) ? campaigns : [];
+  const totalCampaigns = campaignsArray.length;
+  const activeCampaigns = campaignsArray.filter(c => c.status?.toLowerCase() === 'active').length;
+  const totalSent = campaignsArray.reduce((sum, c) => sum + (c.sent || 0), 0);
+  const totalRecipients = campaignsArray.reduce((sum, c) => sum + (c.total_recipients || 0), 0);
 
   return (
     <div className="min-h-screen w-full bg-slate-50 font-sans">
@@ -440,8 +743,8 @@ const Campaigns = () => {
                       </div>
                     </td>
                   </tr>
-                ) : campaigns.length > 0 ? (
-                  campaigns.map(campaign => (
+                ) : campaignsArray.length > 0 ? (
+                  campaignsArray.map(campaign => (
                     <tr key={campaign.id} className="hover:bg-slate-50 transition-colors">
                       <td className="px-6 py-4">
                         <span className="text-sm font-semibold text-slate-800">{campaign.name}</span>
@@ -475,7 +778,7 @@ const Campaigns = () => {
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="flex gap-2">
-                          {campaign.status === 'Draft' && (
+                          {campaign.status.toLowerCase() === 'draft' && (
                             <button
                               onClick={() => handleSendCampaign(campaign.id)}
                               className="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all"
@@ -485,7 +788,7 @@ const Campaigns = () => {
                               Send
                             </button>
                           )}
-                          {campaign.status === 'Active' && (
+                          {campaign.status.toLowerCase() === 'active' && (
                             <>
                               <button
                                 onClick={() => handlePauseCampaign(campaign.id)}
@@ -584,7 +887,7 @@ const Campaigns = () => {
                 <label className="block text-sm font-bold text-slate-700 mb-2">Select Template</label>
                 <select
                   value={selectedTemplate}
-                  onChange={(e) => setSelectedTemplate(e.target.value)}
+                  onChange={(e) => handleTemplateChange(e.target.value)}
                   className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
                 >
                   <option value="">Choose a template...</option>
@@ -599,13 +902,13 @@ const Campaigns = () => {
                 </p>
               </div>
 
-              {/* Excel Upload */}
+              {/* File Upload - Excel & CSV */}
               <div>
-                <label className="block text-sm font-bold text-slate-700 mb-2">Upload Recipients (Excel)</label>
+                <label className="block text-sm font-bold text-slate-700 mb-2">Upload Recipients (Excel/CSV)</label>
                 <div className="border-2 border-dashed border-slate-300 rounded-lg p-6 text-center hover:border-emerald-500 transition-colors">
                   <input
                     type="file"
-                    accept=".xlsx,.xls"
+                    accept=".xlsx,.xls,.csv"
                     onChange={handleFileUpload}
                     className="hidden"
                     id="excel-upload"
@@ -619,20 +922,42 @@ const Campaigns = () => {
                       </div>
                     ) : (
                       <div>
-                        <p className="text-slate-700 font-bold text-sm">Click to upload Excel file</p>
+                        <p className="text-slate-700 font-bold text-sm">Click to upload Excel or CSV file</p>
                         <p className="text-slate-500 text-xs mt-1">Must include phone_number column and variable columns</p>
                       </div>
                     )}
                   </label>
                 </div>
                 <div className="flex items-center justify-between mt-2">
-                  <button
-                    onClick={downloadSampleTemplate}
-                    className="text-xs text-emerald-600 hover:text-emerald-700 font-bold flex items-center gap-1"
-                  >
-                    <Download className="w-3 h-3" />
-                    Download Sample Template
-                  </button>
+                  <div className="flex items-center gap-3">
+                    <button
+                      onClick={downloadSampleTemplate}
+                      disabled={!selectedTemplate}
+                      className={`text-xs font-bold flex items-center gap-1 ${
+                        selectedTemplate 
+                          ? 'text-emerald-600 hover:text-emerald-700 cursor-pointer' 
+                          : 'text-slate-400 cursor-not-allowed'
+                      }`}
+                      title={!selectedTemplate ? 'Please select a template first' : 'Download sample Excel with required columns'}
+                    >
+                      <Download className="w-3 h-3" />
+                      Download Excel
+                    </button>
+                    <span className="text-slate-300">|</span>
+                    <button
+                      onClick={downloadSampleCSV}
+                      disabled={!selectedTemplate}
+                      className={`text-xs font-bold flex items-center gap-1 ${
+                        selectedTemplate 
+                          ? 'text-blue-600 hover:text-blue-700 cursor-pointer' 
+                          : 'text-slate-400 cursor-not-allowed'
+                      }`}
+                      title={!selectedTemplate ? 'Please select a template first' : 'Download sample CSV with required columns'}
+                    >
+                      <Download className="w-3 h-3" />
+                      Download CSV
+                    </button>
+                  </div>
                   {excelFile && (
                     <button
                       onClick={() => {

@@ -1241,7 +1241,7 @@ const AdSetStep = ({ state, dispatch, createdCampaignId }: AdSetStepProps) => {
               id="facebookPageId"
               value={state.facebookPageId}
               onChange={(e: ChangeEvent<HTMLInputElement>) => dispatch({ type: 'UPDATE_FIELD', field: 'facebookPageId', value: e.target.value })}
-              placeholder="e.g., 1234567890"
+              placeholder="e.g., 7755991051"
               className="mt-1"
             />
           </div>
@@ -1563,7 +1563,7 @@ const AdStep = ({ state, dispatch, createdAdSetId }: AdStepProps) => {
                 id="facebookPageIdAd"
                 value={state.facebookPageId}
                 onChange={(e: ChangeEvent<HTMLInputElement>) => dispatch({ type: 'UPDATE_FIELD', field: 'facebookPageId', value: e.target.value })}
-                placeholder="e.g., 1234567890"
+                placeholder="e.g., 7755991051"
                 className="mt-1"
               />
             </div>

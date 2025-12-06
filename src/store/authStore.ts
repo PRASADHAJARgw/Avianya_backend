@@ -16,6 +16,7 @@ interface AuthState {
   isAuthenticated: boolean;
   isLoading: boolean;
   error: string | null;
+  lastActivity: number | null; // Timestamp of last user activity
   
   // Actions
   login: (email: string, password: string) => Promise<void>;
@@ -23,9 +24,37 @@ interface AuthState {
   logout: () => void;
   refreshUser: () => Promise<void>;
   clearError: () => void;
+  checkTokenExpiration: () => boolean;
+  updateLastActivity: () => void;
+  checkInactivity: () => boolean;
 }
 
 const API_BASE_URL = 'http://localhost:8080/api/v2';
+const INACTIVITY_TIMEOUT = 30 * 60 * 1000; // 30 minutes in milliseconds
+
+// Helper function to check if JWT token is expired
+const isTokenExpired = (token: string): boolean => {
+  try {
+    const payload = JSON.parse(atob(token.split('.')[1]));
+    const exp = payload.exp;
+    if (!exp) return false; // No expiration set
+    
+    // Check if token is ACTUALLY expired (no buffer - only logout when truly expired)
+    const expiresAt = exp * 1000; // Convert to milliseconds
+    const now = Date.now();
+    
+    const isExpired = now > expiresAt; // No buffer time
+    if (isExpired) {
+      console.log('⏰ Token has expired');
+      console.log('   Expired at:', new Date(expiresAt).toLocaleString());
+      console.log('   Current time:', new Date(now).toLocaleString());
+    }
+    return isExpired;
+  } catch (error) {
+    console.error('❌ Error checking token expiration:', error);
+    return true; // Treat invalid tokens as expired
+  }
+};
 
 export const useAuthStore = create<AuthState>()(
   persist(
@@ -35,6 +64,7 @@ export const useAuthStore = create<AuthState>()(
       isAuthenticated: false,
       isLoading: false,
       error: null,
+      lastActivity: null,
 
       login: async (email: string, password: string) => {
         set({ isLoading: true, error: null });
@@ -68,6 +98,7 @@ export const useAuthStore = create<AuthState>()(
             isAuthenticated: true,
             isLoading: false,
             error: null,
+            lastActivity: Date.now(), // Set initial activity timestamp
           });
         } catch (error) {
           set({
@@ -132,7 +163,7 @@ export const useAuthStore = create<AuthState>()(
       },
 
       logout: () => {
-        // Optional: Call backend logout endpoint
+        // Optional: Call backend logout endpoint (silently ignore errors)
         const { token } = get();
         if (token) {
           fetch(`${API_BASE_URL}/auth/logout`, {
@@ -140,7 +171,10 @@ export const useAuthStore = create<AuthState>()(
             headers: {
               'Authorization': `Bearer ${token}`,
             },
-          }).catch(console.error);
+          }).catch(() => {
+            // Silently ignore logout endpoint errors (e.g., CORS, network issues)
+            console.log('ℹ️  Backend logout endpoint unavailable (ignored)');
+          });
         }
 
         set({
@@ -176,6 +210,47 @@ export const useAuthStore = create<AuthState>()(
       },
 
       clearError: () => set({ error: null }),
+
+      checkTokenExpiration: () => {
+        const { token, logout } = get();
+        if (!token) {
+          return false;
+        }
+
+        if (isTokenExpired(token)) {
+          console.log('🚨 Token expired - logging out');
+          logout();
+          return true;
+        }
+        return false;
+      },
+
+      updateLastActivity: () => {
+        const { isAuthenticated } = get();
+        if (isAuthenticated) {
+          set({ lastActivity: Date.now() });
+        }
+      },
+
+      checkInactivity: () => {
+        const { lastActivity, isAuthenticated, logout } = get();
+        
+        if (!isAuthenticated || !lastActivity) {
+          return false;
+        }
+
+        const now = Date.now();
+        const timeSinceLastActivity = now - lastActivity;
+
+        if (timeSinceLastActivity > INACTIVITY_TIMEOUT) {
+          console.log('⏰ Session expired due to inactivity (30 minutes)');
+          console.log('   Last activity:', new Date(lastActivity).toLocaleString());
+          console.log('   Current time:', new Date(now).toLocaleString());
+          logout();
+          return true;
+        }
+        return false;
+      },
     }),
     {
       name: 'auth-storage',
@@ -183,11 +258,41 @@ export const useAuthStore = create<AuthState>()(
         user: state.user,
         token: state.token,
         isAuthenticated: state.isAuthenticated,
+        lastActivity: state.lastActivity,
       }),
       onRehydrateStorage: () => (state) => {
         // Validate rehydrated state - fix inconsistencies
         if (state) {
           console.log('🔄 Rehydrating auth state:', state);
+          
+          // Check if token is expired
+          if (state.token && isTokenExpired(state.token)) {
+            console.warn('⚠️  Token expired during rehydration! Clearing auth state...');
+            state.isAuthenticated = false;
+            state.user = null;
+            state.token = null;
+            state.lastActivity = null;
+            console.log('✅ Auth state cleared due to expired token');
+            return;
+          }
+
+          // Check for inactivity (30 minutes)
+          if (state.lastActivity) {
+            const now = Date.now();
+            const timeSinceLastActivity = now - state.lastActivity;
+            
+            if (timeSinceLastActivity > INACTIVITY_TIMEOUT) {
+              console.warn('⚠️  Session expired due to inactivity! Clearing auth state...');
+              console.log('   Last activity:', new Date(state.lastActivity).toLocaleString());
+              console.log('   Inactive for:', Math.floor(timeSinceLastActivity / 1000 / 60), 'minutes');
+              state.isAuthenticated = false;
+              state.user = null;
+              state.token = null;
+              state.lastActivity = null;
+              console.log('✅ Auth state cleared due to inactivity');
+              return;
+            }
+          }
           
           // If isAuthenticated is true but user or token is missing, fix it
           if (state.isAuthenticated && (!state.user || !state.token)) {

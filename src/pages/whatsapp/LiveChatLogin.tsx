@@ -219,6 +219,28 @@ export default function LiveChatLogin() {
   // Auth Form
   return (
     <div className="min-h-screen w-full flex items-center justify-center p-4 bg-gray-50 overflow-hidden relative font-sans">
+      {/* Top Badge - Unified Global Platform - Centered and Larger */}
+      <motion.div 
+        initial={{ y: -40, opacity: 0 }}
+        animate={{ y: 0, opacity: 1 }}
+        transition={{ delay: 0.2, duration: 0.6 }}
+        className="fixed top-0 left-0 w-full flex items-center justify-center z-40 pointer-events-none"
+      >
+        <div className="bg-gradient-to-r from-emerald-500 via-teal-500 to-blue-500 text-white px-12 py-5 rounded-full shadow-2xl flex items-center gap-6 border-4 border-white mt-8"
+          style={{ fontSize: '2rem', fontWeight: 800, letterSpacing: '0.04em' }}>
+          <Sparkles className="w-10 h-10" />
+          <span className="font-bold tracking-wide whitespace-nowrap flex items-center gap-3">
+            Unified Global Platform
+            <span
+  className="text-cyan-200 bg-clip-text text-transparent text-3xl font-semibold ml-3"
+>
+  by Avianya
+</span>
+          </span>
+          <Sparkles className="w-10 h-10" />
+        </div>
+      </motion.div>
+
       {/* Dynamic Background Elements */}
       <div className="absolute inset-0 bg-gradient-to-br from-indigo-50 via-purple-50 to-pink-50 -z-20" />
       
@@ -243,6 +265,7 @@ export default function LiveChatLogin() {
         ref={containerRef}
         className="w-full max-w-4xl min-h-[650px] bg-white rounded-[2.5rem] shadow-2xl overflow-hidden relative flex flex-col md:flex-row z-10"
       >
+
         {/* Left/Right Panel - Form Area */}
         <div className={`
           w-full md:w-1/2 p-8 md:p-12 flex flex-col z-10 transition-all duration-700 ease-in-out bg-white relative
@@ -271,11 +294,18 @@ export default function LiveChatLogin() {
                 <h2 className="text-3xl font-display font-bold text-gray-800 mb-2">
                   {mode === AuthMode.LOGIN ? 'Welcome Back!' : 'Join Us Today!'}
                 </h2>
-                <p className="text-gray-500 font-semibold">
+                <p className="text-gray-600 font-semibold mb-3">
                   {mode === AuthMode.LOGIN 
                     ? 'Sign in to access your WhatsApp dashboard' 
                     : 'Create an account to get started'}
                 </p>
+                <div className="flex items-center gap-2 justify-center bg-gradient-to-r from-emerald-50 via-teal-50 to-blue-50 px-4 py-2.5 rounded-xl border border-emerald-200/50">
+                  <Sparkles className="w-4 h-4 text-emerald-600" />
+                  <p className="text-sm font-bold bg-gradient-to-r from-emerald-600 via-teal-600 to-blue-600 bg-clip-text text-transparent">
+                    Elevate Your Messages Daily
+                  </p>
+                  <Sparkles className="w-4 h-4 text-emerald-600" />
+                </div>
               </div>
 
               <form onSubmit={handleSubmit} className="flex-1 flex flex-col">
@@ -428,9 +458,15 @@ export default function LiveChatLogin() {
                   <h3 className="text-4xl font-display font-bold text-white mb-4">
                     New Here?
                   </h3>
-                  <p className="text-white/90 mb-8 font-semibold text-lg">
+                  <p className="text-white/90 mb-6 font-semibold text-lg">
                     Join thousands of marketers automating their WhatsApp campaigns with AI-powered tools.
                   </p>
+                  {/* <div className="bg-white/10 backdrop-blur-sm rounded-2xl p-4 mb-6 border border-white/20">
+                    <p className="text-white font-bold text-xl mb-2">🚀 WhatsApp Business Platform</p>
+                    <p className="text-white/80 text-sm font-medium">
+                      Transform conversations into conversions • Reach customers instantly • Automate with intelligence
+                    </p>
+                  </div> */}
                   <div className="flex justify-center">
                     <AuthButton 
                       onClick={toggleMode} 
@@ -453,9 +489,15 @@ export default function LiveChatLogin() {
                   <h3 className="text-4xl font-display font-bold text-white mb-4">
                     Already a Member?
                   </h3>
-                  <p className="text-white/90 mb-8 font-semibold text-lg">
+                  <p className="text-white/90 mb-6 font-semibold text-lg">
                     Sign in to continue managing your WhatsApp campaigns and view real-time analytics.
                   </p>
+                  <div className="bg-white/10 backdrop-blur-sm rounded-2xl p-4 mb-6 border border-white/20">
+                    <p className="text-white font-bold text-xl mb-2">💬 Messaging Excellence</p>
+                    <p className="text-white/80 text-sm font-medium">
+                      Broadcast to thousands • Personalize at scale • Track engagement • Drive results
+                    </p>
+                  </div>
                   <div className="flex justify-center">
                     <AuthButton 
                       onClick={toggleMode} 
@@ -474,8 +516,15 @@ export default function LiveChatLogin() {
       </div>
       
       {/* Footer */}
-      <div className="absolute bottom-4 text-gray-400 text-xs text-center w-full font-bold tracking-widest opacity-50">
-        WHATSAPP CAMPAIGN SYSTEM &copy; {new Date().getFullYear()}
+      <div className="absolute bottom-4 text-center w-full z-30">
+        <div className="flex flex-col items-center gap-1">
+          <p className="text-gray-500 text-sm font-bold tracking-wide">
+            Unified Global Platform for Business to Messaging, Marketing, Automation with AI
+          </p>
+          <p className="text-gray-400 text-xs font-semibold">
+            Super Charged by Avianya Tech &copy; {new Date().getFullYear()}
+          </p>
+        </div>
       </div>
     </div>
   );

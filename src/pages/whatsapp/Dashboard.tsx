@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useAuthStore } from '@/store/authStore';
 import { useToast } from '@/hooks/use-toast';
 import { 
@@ -16,7 +16,9 @@ import {
   X,
   BarChart3,
   PieChart as PieChartIcon,
-  Activity
+  Activity,
+  RefreshCw,
+  LayoutDashboard
 } from 'lucide-react';
 import { 
   PieChart, Pie, Cell, Tooltip, ResponsiveContainer, Legend,
@@ -26,25 +28,17 @@ import {
 // Types
 interface Campaign {
   id: string;
-  phoneNumberId?: string;
   name: string;
-  date: string;
-  stats: {
-    sent: number;
-    delivered: number;
-    read: number;
-    failed: number;
-    responseRate: number;
-  };
-  status: 'Active' | 'Completed' | 'Draft';
-}
-
-interface PhoneNumber {
-  id: string;
-  display_name: string;
-  phone_number: string;
-  quality_rating: 'High' | 'Medium' | 'Low';
-  status: 'Connected' | 'Pending' | 'Offline';
+  template_name: string;
+  status: string;
+  total_recipients: number;
+  sent: number;
+  delivered: number;
+  read: number;
+  failed: number;
+  pending: number;
+  created_at: string;
+  completed_at: string | null;
 }
 
 // StatCard Component
@@ -92,29 +86,47 @@ const StatCard: React.FC<{
   );
 };
 
-// Mock Data
-const INITIAL_CAMPAIGNS: Campaign[] = [
-  { id: '1', phoneNumberId: '1', name: 'Summer Sale Blast', date: '2023-10-15', status: 'Completed', stats: { sent: 12500, delivered: 12100, read: 9800, failed: 400, responseRate: 15 } },
-  { id: '2', phoneNumberId: '2', name: 'Abandoned Cart Recovery', date: '2023-10-18', status: 'Active', stats: { sent: 450, delivered: 445, read: 320, failed: 5, responseRate: 42 } },
-  { id: '3', phoneNumberId: '1', name: 'Black Friday Teaser', date: '2023-10-20', status: 'Active', stats: { sent: 5000, delivered: 4800, read: 1200, failed: 200, responseRate: 8 } },
-  { id: '4', phoneNumberId: '2', name: 'Loyalty Rewards', date: '2023-10-22', status: 'Draft', stats: { sent: 0, delivered: 0, read: 0, failed: 0, responseRate: 0 } },
-  { id: '5', phoneNumberId: '1', name: 'Holiday Greetings', date: '2023-10-25', status: 'Active', stats: { sent: 8500, delivered: 8400, read: 7200, failed: 100, responseRate: 25 } },
-];
-
-const INITIAL_NUMBERS: PhoneNumber[] = [
-  { id: '1', display_name: 'Main Support', phone_number: '+1 (555) 010-9999', quality_rating: 'High', status: 'Connected' },
-  { id: '2', display_name: 'Marketing Line', phone_number: '+44 20 7123 4567', quality_rating: 'Medium', status: 'Connected' },
-];
-
 export default function Dashboard() {
   const { user } = useAuthStore();
   const { toast } = useToast();
   
-  const [campaigns] = useState<Campaign[]>(INITIAL_CAMPAIGNS);
-  const [numbers] = useState<PhoneNumber[]>(INITIAL_NUMBERS);
-  const [filterPhone, setFilterPhone] = useState<string>('all');
+  const [campaigns, setCampaigns] = useState<Campaign[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [filterStatus, setFilterStatus] = useState<string>('all');
   const [filterDate, setFilterDate] = useState<string>('');
   const [filterCampaignId, setFilterCampaignId] = useState<string>('all');
+
+  // Fetch campaigns from backend
+  useEffect(() => {
+    fetchCampaigns();
+  }, []);
+
+  const fetchCampaigns = async () => {
+    try {
+      setLoading(true);
+      const response = await fetch('http://localhost:8080/campaigns', {
+        headers: {
+          'Authorization': `Bearer ${useAuthStore.getState().token}`
+        }
+      });
+
+      if (!response.ok) throw new Error('Failed to fetch campaigns');
+
+      const data = await response.json();
+      // Ensure campaigns is always an array
+      setCampaigns(Array.isArray(data) ? data : []);
+    } catch (err) {
+      console.error('Error fetching campaigns:', err);
+      setCampaigns([]); // Set empty array on error
+      toast({
+        title: 'Error',
+        description: 'Failed to load campaigns',
+        variant: 'destructive',
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleConnectWABA = () => {
     if (!user || !user.id) {
@@ -133,34 +145,41 @@ export default function Dashboard() {
 
   // Filter Logic
   const filteredCampaigns = useMemo(() => {
+    // Ensure campaigns is an array before filtering
+    if (!Array.isArray(campaigns)) {
+      console.warn('campaigns is not an array:', campaigns);
+      return [];
+    }
     return campaigns.filter(c => {
-      const matchesPhone = filterPhone === 'all' || c.phoneNumberId === filterPhone;
-      const matchesDate = !filterDate || c.date === filterDate;
+      const matchesDate = !filterDate || c.created_at.startsWith(filterDate);
       const matchesCampaign = filterCampaignId === 'all' || c.id === filterCampaignId;
-      return matchesPhone && matchesDate && matchesCampaign;
+      const matchesStatus = filterStatus === 'all' || c.status.toLowerCase() === filterStatus.toLowerCase();
+      return matchesDate && matchesCampaign && matchesStatus;
     });
-  }, [campaigns, filterPhone, filterDate, filterCampaignId]);
+  }, [campaigns, filterDate, filterCampaignId, filterStatus]);
 
   // Computed Stats
-  const totalSent = filteredCampaigns.reduce((acc, c) => acc + c.stats.sent, 0);
-  const totalDelivered = filteredCampaigns.reduce((acc, c) => acc + c.stats.delivered, 0);
-  const totalRead = filteredCampaigns.reduce((acc, c) => acc + c.stats.read, 0);
-  const totalFailed = filteredCampaigns.reduce((acc, c) => acc + c.stats.failed, 0);
+  const totalSent = filteredCampaigns.reduce((acc, c) => acc + c.sent, 0);
+  const totalDelivered = filteredCampaigns.reduce((acc, c) => acc + c.delivered, 0);
+  const totalRead = filteredCampaigns.reduce((acc, c) => acc + (c.read || 0), 0);
+  const totalFailed = filteredCampaigns.reduce((acc, c) => acc + c.failed, 0);
+  const totalRecipients = filteredCampaigns.reduce((acc, c) => acc + c.total_recipients, 0);
   const readRate = totalSent ? Math.round((totalRead / totalSent) * 100) : 0;
+  const successRate = totalRecipients ? Math.round(((totalDelivered + totalRead) / totalRecipients) * 100) : 0;
 
   // Chart Data
   const pieData = [
-    { name: 'Read', value: totalRead, color: '#10b981' },
-    { name: 'Delivered', value: totalDelivered - totalRead, color: '#059669' },
+    { name: 'Read', value: totalRead, color: '#6366f1' },
+    { name: 'Delivered', value: totalDelivered, color: '#10b981' },
     { name: 'Failed', value: totalFailed, color: '#ef4444' },
   ];
 
-  const barData = filteredCampaigns.map(c => ({
-    name: c.name,
-    Read: c.stats.read,
-    Delivered: c.stats.delivered,
-    Failed: c.stats.failed,
-    ResponseRate: c.stats.responseRate
+  const barData = filteredCampaigns.slice(0, 10).map(c => ({
+    name: c.name.length > 15 ? c.name.substring(0, 15) + '...' : c.name,
+    Read: c.read || 0,
+    Delivered: c.delivered,
+    Failed: c.failed,
+    SuccessRate: c.total_recipients ? Math.round(((c.delivered + (c.read || 0)) / c.total_recipients) * 100) : 0
   }));
 
   const CustomTooltip = ({ active, payload, label }: { active?: boolean; payload?: Array<{ fill?: string; color?: string; name: string; value: number }>; label?: string }) => {
@@ -171,7 +190,7 @@ export default function Dashboard() {
           {payload.map((entry, index: number) => (
             <p key={index} style={{ color: entry.fill || entry.color }} className="text-xs font-semibold flex items-center gap-2 mb-1">
               <span className="w-2 h-2 rounded-full" style={{ background: entry.fill || entry.color }}></span>
-              {entry.name}: {entry.value}{entry.name === 'ResponseRate' ? '%' : ''}
+              {entry.name}: {entry.value}{entry.name === 'SuccessRate' || entry.name === 'Success Rate' ? '%' : ''}
             </p>
           ))}
         </div>
@@ -181,23 +200,32 @@ export default function Dashboard() {
   };
 
   const clearFilters = () => {
-    setFilterPhone('all');
+    setFilterStatus('all');
     setFilterDate('');
     setFilterCampaignId('all');
   };
 
-  const hasFilters = filterPhone !== 'all' || filterDate !== '' || filterCampaignId !== 'all';
+  const hasFilters = filterStatus !== 'all' || filterDate !== '' || filterCampaignId !== 'all';
 
   const handleDownloadReport = () => {
-    const headers = ['Campaign Name', 'Date', 'Status', 'Sent', 'Delivered', 'Read', 'Failed', 'Response Rate'];
+    const headers = ['Campaign Name', 'Template', 'Date', 'Status', 'Total', 'Sent', 'Delivered', 'Read', 'Failed', 'Success Rate'];
     const rows = filteredCampaigns.map(c => [
-      c.name, c.date, c.status, c.stats.sent, c.stats.delivered, c.stats.read, c.stats.failed, `${c.stats.responseRate}%`
+      c.name, 
+      c.template_name,
+      new Date(c.created_at).toLocaleDateString(), 
+      c.status, 
+      c.total_recipients,
+      c.sent, 
+      c.delivered, 
+      c.read || 0, 
+      c.failed, 
+      c.total_recipients ? `${Math.round(((c.delivered + (c.read || 0)) / c.total_recipients) * 100)}%` : '0%'
     ]);
     const csvContent = "data:text/csv;charset=utf-8," + headers.join(",") + "\n" + rows.map(e => e.join(",")).join("\n");
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement("a");
     link.setAttribute("href", encodedUri);
-    link.setAttribute("download", `waba_report_${new Date().toISOString().split('T')[0]}.csv`);
+    link.setAttribute("download", `campaign_report_${new Date().toISOString().split('T')[0]}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -230,7 +258,7 @@ export default function Dashboard() {
           <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
             {/* Left Side: Title */}
             <div className="flex items-center gap-3">
-              <MessageSquare className="text-green-500 w-7 h-7" />
+              <LayoutDashboard className="text-green-500 w-7 h-7" />
               <div>
                 <h1 className="text-xl font-bold text-slate-800">WABA Analytics</h1>
                 <p className="text-slate-500 text-xs mt-0.5">Real-time WhatsApp Business performance insights</p>
@@ -258,18 +286,20 @@ export default function Dashboard() {
                   <Filter className="w-4 h-4 text-slate-400" />
                   <span className="text-sm font-bold text-slate-700">Filters:</span>
                 </div>
+                
                 <div className="flex items-center gap-2">
-                  <label className="text-xs font-bold text-slate-700 whitespace-nowrap">Phone Number</label>
+                  <label className="text-xs font-bold text-slate-700 whitespace-nowrap">Status</label>
                   <select
-                    value={filterPhone}
-                    onChange={(e) => setFilterPhone(e.target.value)}
-                    title="All Numbers"
+                    value={filterStatus}
+                    onChange={(e) => setFilterStatus(e.target.value)}
+                    title="All Status"
                     className="bg-white border border-slate-200 rounded-lg px-3 py-1.5 text-slate-800 text-xs focus:outline-none focus:ring-2 focus:ring-emerald-200 transition-all min-w-[120px]"
                   >
-                    <option value="all">All Numbers</option>
-                    {numbers.map(num => (
-                      <option key={num.id} value={num.id}>{num.display_name}</option>
-                    ))}
+                    <option value="all">All Status</option>
+                    <option value="draft">Draft</option>
+                    <option value="active">Active</option>
+                    <option value="completed">Completed</option>
+                    <option value="paused">Paused</option>
                   </select>
                 </div>
 
@@ -300,6 +330,15 @@ export default function Dashboard() {
                 </div>
 
                 <button
+                  onClick={fetchCampaigns}
+                  disabled={loading}
+                  className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg text-xs font-bold shadow-sm flex items-center gap-1.5 transition-all disabled:opacity-50"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
+                  Refresh
+                </button>
+
+                <button
                   onClick={handleDownloadReport}
                   className="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1.5 rounded-lg text-xs font-bold shadow-sm flex items-center gap-1.5 transition-all"
                 >
@@ -316,20 +355,27 @@ export default function Dashboard() {
       <main className="px-4 md:px-8 pb-8 w-full">
         
         {/* Stats Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mb-4">
+          <StatCard
+            title="Total Recipients"
+            value={totalRecipients.toLocaleString()}
+            trend={8}
+            icon={<Users className="w-5 h-5" />}
+            subtext="All campaigns"
+          />
           <StatCard
             title="Total Sent"
             value={totalSent.toLocaleString()}
             trend={12}
             icon={<Send className="w-5 h-5" />}
-            subtext="This month"
+            subtext="Messages sent"
           />
           <StatCard
             title="Delivered"
             value={totalDelivered.toLocaleString()}
             trend={8}
             icon={<CheckCheck className="w-5 h-5" />}
-            subtext="Success rate"
+            subtext="Delivered"
           />
           <StatCard
             title="Read Rate"
@@ -339,10 +385,11 @@ export default function Dashboard() {
             subtext="Engagement"
           />
           <StatCard
-            title="Failed"
-            value={totalFailed.toLocaleString()}
-            icon={<XCircle className="w-5 h-5" />}
-            subtext="Error tracking"
+            title="Success Rate"
+            value={`${successRate}%`}
+            trend={10}
+            icon={<MessageSquare className="w-5 h-5" />}
+            subtext="Overall success"
           />
         </div>
 
@@ -362,20 +409,31 @@ export default function Dashboard() {
                 <p className="text-slate-500 text-xs mt-1">Delivery breakdown per campaign</p>
               </div>
             </div>
-            <div className="h-60 w-full">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={barData} margin={{ top: 5, right: 30, left: 0, bottom: 0 }} barCategoryGap={2}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
-                  <XAxis dataKey="name" stroke="#94a3b8" tick={{ fill: '#64748b', fontSize: 11 }} tickLine={false} axisLine={false} />
-                  <YAxis stroke="#94a3b8" tick={{ fill: '#64748b', fontSize: 11 }} tickLine={false} axisLine={false} />
-                  <Tooltip content={<CustomTooltip />} cursor={{fill: '#f1f5f9'}} />
-                  <Legend wrapperStyle={{ paddingTop: '10px' }} iconType="circle" />
-                  <Bar dataKey="Delivered" fill="#34d399" radius={[4, 4, 0, 0]} barSize={28} />
-                  <Bar dataKey="Read" fill="#059669" radius={[4, 4, 0, 0]} barSize={28} />
-                  <Bar dataKey="Failed" fill="#f87171" radius={[4, 4, 0, 0]} barSize={28} />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
+            {loading ? (
+              <div className="h-60 w-full flex items-center justify-center">
+                <RefreshCw className="w-8 h-8 text-emerald-600 animate-spin" />
+              </div>
+            ) : barData.length === 0 ? (
+              <div className="h-60 w-full flex flex-col items-center justify-center">
+                <MessageCircle className="w-12 h-12 text-slate-300 mb-3" />
+                <p className="text-slate-500 text-sm">No campaign data available</p>
+              </div>
+            ) : (
+              <div className="h-60 w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={barData} margin={{ top: 5, right: 30, left: 0, bottom: 0 }} barCategoryGap={2}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
+                    <XAxis dataKey="name" stroke="#94a3b8" tick={{ fill: '#64748b', fontSize: 11 }} tickLine={false} axisLine={false} />
+                    <YAxis stroke="#94a3b8" tick={{ fill: '#64748b', fontSize: 11 }} tickLine={false} axisLine={false} />
+                    <Tooltip content={<CustomTooltip />} cursor={{fill: '#f1f5f9'}} />
+                    <Legend wrapperStyle={{ paddingTop: '10px' }} iconType="circle" />
+                    <Bar dataKey="Delivered" fill="#34d399" radius={[4, 4, 0, 0]} barSize={28} />
+                    <Bar dataKey="Read" fill="#6366f1" radius={[4, 4, 0, 0]} barSize={28} />
+                    <Bar dataKey="Failed" fill="#f87171" radius={[4, 4, 0, 0]} barSize={28} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            )}
           </div>
 
           {/* Pie Chart */}
@@ -385,32 +443,43 @@ export default function Dashboard() {
               Total Volume
             </h3>
             <p className="text-slate-500 text-xs mb-2">Delivery status distribution</p>
-            <div className="flex-1 min-h-[100px] relative">
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie
-                    data={pieData}
-                    cx="50%"
-                    cy="50%"
-                    innerRadius={65}
-                    outerRadius={85}
-                    paddingAngle={4}
-                    dataKey="value"
-                    stroke="none"
-                  >
-                    {pieData.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={entry.color} />
-                    ))}
-                  </Pie>
-                  <Tooltip content={<CustomTooltip />} />
-                  <Legend verticalAlign="bottom" height={36} iconType="circle" />
-                </PieChart>
-              </ResponsiveContainer>
-              <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-[60%] text-center pointer-events-none">
-                <div className="text-3xl font-bold text-slate-800">{totalSent > 1000 ? (totalSent/1000).toFixed(1) + 'k' : totalSent}</div>
-                <div className="text-[10px] text-emerald-600 font-bold uppercase tracking-wider">Sent</div>
+            {loading ? (
+              <div className="flex-1 min-h-[220px] flex items-center justify-center">
+                <RefreshCw className="w-8 h-8 text-emerald-600 animate-spin" />
               </div>
-            </div>
+            ) : totalSent === 0 ? (
+              <div className="flex-1 min-h-[220px] flex flex-col items-center justify-center">
+                <MessageCircle className="w-12 h-12 text-slate-300 mb-3" />
+                <p className="text-slate-500 text-sm">No messages sent yet</p>
+              </div>
+            ) : (
+              <div className="flex-1 min-h-[100px] relative">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={pieData}
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={65}
+                      outerRadius={85}
+                      paddingAngle={4}
+                      dataKey="value"
+                      stroke="none"
+                    >
+                      {pieData.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={entry.color} />
+                      ))}
+                    </Pie>
+                    <Tooltip content={<CustomTooltip />} />
+                    <Legend verticalAlign="bottom" height={36} iconType="circle" />
+                  </PieChart>
+                </ResponsiveContainer>
+                <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-[60%] text-center pointer-events-none">
+                  <div className="text-3xl font-bold text-slate-800">{totalSent > 1000 ? (totalSent/1000).toFixed(1) + 'k' : totalSent}</div>
+                  <div className="text-[10px] text-emerald-600 font-bold uppercase tracking-wider">Sent</div>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Area Chart */}
@@ -421,36 +490,47 @@ export default function Dashboard() {
                   <Activity className="w-5 h-5 text-emerald-600" />
                   Engagement Trends
                 </h3>
-                <p className="text-slate-500 text-xs mt-1">Response rate velocity</p>
+                <p className="text-slate-500 text-xs mt-1">Success rate across campaigns</p>
               </div>
             </div>
-            <div className="h-64 w-full">
-              <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={barData} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
-                  <defs>
-                    <linearGradient id="colorResponse" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#10b981" stopOpacity={0.2}/>
-                      <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
-                  <XAxis dataKey="name" stroke="#94a3b8" tick={{ fill: '#64748b', fontSize: 11 }} tickLine={false} axisLine={false} />
-                  <YAxis unit="%" stroke="#94a3b8" tick={{ fill: '#64748b', fontSize: 11 }} tickLine={false} axisLine={false} />
-                  <Tooltip content={<CustomTooltip />} />
-                  <Area 
-                    type="monotone" 
-                    dataKey="ResponseRate" 
-                    stroke="#059669" 
-                    strokeWidth={3}
-                    fillOpacity={1} 
-                    fill="url(#colorResponse)" 
-                    name="Response Rate"
-                    dot={{ fill: '#059669', stroke: '#fff', strokeWidth: 2, r: 4 }}
-                    activeDot={{ r: 6, strokeWidth: 0 }}
-                  />
-                </AreaChart>
-              </ResponsiveContainer>
-            </div>
+            {loading ? (
+              <div className="h-64 w-full flex items-center justify-center">
+                <RefreshCw className="w-8 h-8 text-emerald-600 animate-spin" />
+              </div>
+            ) : barData.length === 0 ? (
+              <div className="h-64 w-full flex flex-col items-center justify-center">
+                <MessageCircle className="w-12 h-12 text-slate-300 mb-3" />
+                <p className="text-slate-500 text-sm">No campaign data available</p>
+              </div>
+            ) : (
+              <div className="h-64 w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart data={barData} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
+                    <defs>
+                      <linearGradient id="colorResponse" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#10b981" stopOpacity={0.2}/>
+                        <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
+                    <XAxis dataKey="name" stroke="#94a3b8" tick={{ fill: '#64748b', fontSize: 11 }} tickLine={false} axisLine={false} />
+                    <YAxis unit="%" stroke="#94a3b8" tick={{ fill: '#64748b', fontSize: 11 }} tickLine={false} axisLine={false} domain={[0, 100]} />
+                    <Tooltip content={<CustomTooltip />} />
+                    <Area 
+                      type="monotone" 
+                      dataKey="SuccessRate" 
+                      stroke="#059669" 
+                      strokeWidth={3}
+                      fillOpacity={1} 
+                      fill="url(#colorResponse)" 
+                      name="Success Rate"
+                      dot={{ fill: '#059669', stroke: '#fff', strokeWidth: 2, r: 4 }}
+                      activeDot={{ r: 6, strokeWidth: 0 }}
+                    />
+                  </AreaChart>
+                </ResponsiveContainer>
+              </div>
+            )}
           </div>
         </div>
 
@@ -468,49 +548,85 @@ export default function Dashboard() {
               <thead className="bg-slate-50 border-b border-slate-100">
                 <tr>
                   <th className="px-6 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Campaign</th>
+                  <th className="px-6 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Template</th>
                   <th className="px-6 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Date</th>
                   <th className="px-6 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Status</th>
+                  <th className="px-6 py-3 text-right text-xs font-bold text-slate-500 uppercase tracking-wider">Total</th>
                   <th className="px-6 py-3 text-right text-xs font-bold text-slate-500 uppercase tracking-wider">Sent</th>
                   <th className="px-6 py-3 text-right text-xs font-bold text-slate-500 uppercase tracking-wider">Delivered</th>
                   <th className="px-6 py-3 text-right text-xs font-bold text-slate-500 uppercase tracking-wider">Read</th>
                   <th className="px-6 py-3 text-right text-xs font-bold text-slate-500 uppercase tracking-wider">Failed</th>
-                  <th className="px-6 py-3 text-right text-xs font-bold text-slate-500 uppercase tracking-wider">Response</th>
+                  <th className="px-6 py-3 text-right text-xs font-bold text-slate-500 uppercase tracking-wider">Success</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {filteredCampaigns.map((campaign) => (
-                  <tr key={campaign.id} className="hover:bg-slate-50 transition-colors">
-                    <td className="px-6 py-4">
-                      <div className="text-sm font-bold text-slate-800">{campaign.name}</div>
+                {loading ? (
+                  <tr>
+                    <td colSpan={10} className="px-6 py-12 text-center">
+                      <RefreshCw className="w-8 h-8 text-emerald-600 animate-spin mx-auto mb-3" />
+                      <p className="text-slate-500 font-medium">Loading campaigns...</p>
                     </td>
-                    <td className="px-6 py-4 text-sm text-slate-600">{campaign.date}</td>
-                    <td className="px-6 py-4">
-                      <span className={`inline-flex items-center px-2 py-1 rounded-md text-xs font-bold ${
-                        campaign.status === 'Active' ? 'bg-emerald-100 text-emerald-700' :
-                        campaign.status === 'Completed' ? 'bg-blue-100 text-blue-700' :
-                        'bg-slate-100 text-slate-700'
-                      }`}>
-                        {campaign.status}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 text-right text-sm font-semibold text-slate-800">{campaign.stats.sent.toLocaleString()}</td>
-                    <td className="px-6 py-4 text-right text-sm font-semibold text-emerald-600">{campaign.stats.delivered.toLocaleString()}</td>
-                    <td className="px-6 py-4 text-right text-sm font-semibold text-blue-600">{campaign.stats.read.toLocaleString()}</td>
-                    <td className="px-6 py-4 text-right text-sm font-semibold text-rose-600">{campaign.stats.failed.toLocaleString()}</td>
-                    <td className="px-6 py-4 text-right text-sm font-bold text-slate-800">{campaign.stats.responseRate}%</td>
                   </tr>
-                ))}
+                ) : filteredCampaigns.length > 0 ? (
+                  filteredCampaigns.map((campaign) => {
+                    const successRate = campaign.total_recipients 
+                      ? Math.round(((campaign.delivered + (campaign.read || 0)) / campaign.total_recipients) * 100)
+                      : 0;
+                    
+                    return (
+                      <tr key={campaign.id} className="hover:bg-slate-50 transition-colors">
+                        <td className="px-6 py-4">
+                          <div className="text-sm font-bold text-slate-800">{campaign.name}</div>
+                        </td>
+                        <td className="px-6 py-4">
+                          <div className="text-xs text-slate-600">{campaign.template_name}</div>
+                        </td>
+                        <td className="px-6 py-4 text-sm text-slate-600">
+                          {new Date(campaign.created_at).toLocaleDateString()}
+                        </td>
+                        <td className="px-6 py-4">
+                          <span className={`inline-flex items-center px-2 py-1 rounded-md text-xs font-bold ${
+                            campaign.status === 'active' ? 'bg-emerald-100 text-emerald-700' :
+                            campaign.status === 'completed' ? 'bg-blue-100 text-blue-700' :
+                            campaign.status === 'paused' ? 'bg-amber-100 text-amber-700' :
+                            'bg-slate-100 text-slate-700'
+                          }`}>
+                            {campaign.status.charAt(0).toUpperCase() + campaign.status.slice(1)}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 text-right text-sm font-semibold text-slate-800">
+                          {campaign.total_recipients.toLocaleString()}
+                        </td>
+                        <td className="px-6 py-4 text-right text-sm font-semibold text-blue-600">
+                          {campaign.sent.toLocaleString()}
+                        </td>
+                        <td className="px-6 py-4 text-right text-sm font-semibold text-emerald-600">
+                          {campaign.delivered.toLocaleString()}
+                        </td>
+                        <td className="px-6 py-4 text-right text-sm font-semibold text-indigo-600">
+                          {(campaign.read || 0).toLocaleString()}
+                        </td>
+                        <td className="px-6 py-4 text-right text-sm font-semibold text-rose-600">
+                          {campaign.failed.toLocaleString()}
+                        </td>
+                        <td className="px-6 py-4 text-right text-sm font-bold text-slate-800">
+                          {successRate}%
+                        </td>
+                      </tr>
+                    );
+                  })
+                ) : (
+                  <tr>
+                    <td colSpan={10} className="px-6 py-12 text-center">
+                      <MessageCircle className="w-12 h-12 text-slate-300 mx-auto mb-4" />
+                      <h3 className="text-slate-900 font-bold text-sm mb-1">No campaigns found</h3>
+                      <p className="text-slate-400 text-xs">Try adjusting your filters or create a new campaign</p>
+                    </td>
+                  </tr>
+                )}
               </tbody>
             </table>
           </div>
-          
-          {filteredCampaigns.length === 0 && (
-            <div className="p-12 text-center">
-              <MessageCircle className="w-12 h-12 text-slate-300 mx-auto mb-4" />
-              <h3 className="text-slate-900 font-bold text-sm mb-1">No campaigns found</h3>
-              <p className="text-slate-400 text-xs">Try adjusting your filters</p>
-            </div>
-          )}
         </div>
 
       </main>

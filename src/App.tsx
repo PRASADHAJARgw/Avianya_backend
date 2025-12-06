@@ -11,6 +11,8 @@ import TemplatesList from './pages/whatsapp/TemplatesList';
 import TemplatesEditor from './pages/whatsapp/TemplatesEditor';
 import TemplatesViewer from './pages/whatsapp/TemplatesViewer';
 import Campaigns from './pages/whatsapp/Campaigns';
+import CampaignDetail from './pages/whatsapp/CampaignDetail';
+import Settings from './pages/whatsapp/Settings';
 // Live Chat with Auth
 import LiveChatLogin from './pages/whatsapp/LiveChatLogin';
 import ForgotPassword from './pages/whatsapp/ForgotPassword';
@@ -45,7 +47,37 @@ import InstagramNotFound from './pages/instagram/NotFound';
 // const CreateNew = () => <div><h1>Create New Bot Content</h1></div>; // This is replaced by Index
 
 function RootRoutes() {
-  const { user, isAuthenticated, token } = useAuthStore();
+  const { user, isAuthenticated, token, updateLastActivity, checkInactivity } = useAuthStore();
+  
+  // Track user activity (mouse move, keyboard, clicks)
+  useEffect(() => {
+    if (!isAuthenticated) return;
+
+    const handleActivity = () => {
+      updateLastActivity();
+    };
+
+    // Track various user interactions
+    window.addEventListener('mousemove', handleActivity);
+    window.addEventListener('keydown', handleActivity);
+    window.addEventListener('click', handleActivity);
+    window.addEventListener('scroll', handleActivity);
+    window.addEventListener('touchstart', handleActivity);
+
+    // Check for inactivity every minute
+    const inactivityInterval = setInterval(() => {
+      checkInactivity();
+    }, 60000); // Check every 60 seconds
+
+    return () => {
+      window.removeEventListener('mousemove', handleActivity);
+      window.removeEventListener('keydown', handleActivity);
+      window.removeEventListener('click', handleActivity);
+      window.removeEventListener('scroll', handleActivity);
+      window.removeEventListener('touchstart', handleActivity);
+      clearInterval(inactivityInterval);
+    };
+  }, [isAuthenticated, updateLastActivity, checkInactivity]);
   
   // Debug authentication state
   console.log('🔍 AUTH DEBUG - App.tsx RootRoutes:');
@@ -99,6 +131,8 @@ function RootRoutes() {
           <Route path="/wa/templates/view/:id" element={<TemplatesViewer />} />
           <Route path="/wa/createNew" element={<Index  />} />
           <Route path="/wa/campaigns" element={<Campaigns />} />
+          <Route path="/wa/campaigns/:id" element={<CampaignDetail />} />
+          <Route path="/wa/settings" element={<Settings />} />
           {/* Instagram (IG) routes */}
           <Route path="/ig/" element={<InstagramIndex />} />
           <Route path="/ig/dashboard" element={<InstagramDashboard />} />

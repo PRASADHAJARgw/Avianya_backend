@@ -94,7 +94,7 @@ function replaceVarsInTemplate(components: MessageTemplateComponent[], vars: Tem
 }
 
 async function uploadFile(file: File, to: string) {
-    const WHATSAPP_API_URL = `https://graph.facebook.com/v20.0/${process.env.WHATSAPP_API_PHONE_NUMBER_ID}/media`;
+    const WHATSAPP_API_URL = `https://graph.facebook.com/v24.0/${process.env.WHATSAPP_API_PHONE_NUMBER_ID}/media`;
     const headers = {
         'Authorization': `Bearer ${process.env.WHATSAPP_ACCESS_TOKEN}`
     };
